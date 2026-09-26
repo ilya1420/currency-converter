@@ -16,6 +16,11 @@ final class KrakenRateProvider implements RateProviderInterface
 {
     public function __construct(private KrakenAssetMapper $mapper) {}
 
+    public function source(): RateSource
+    {
+        return RateSource::KRAKEN;
+    }
+
     public function supports(Currency $from, Currency $to): bool
     {
         if ($from->type() !== CurrencyType::CRYPTO || $to !== Currency::USD) {

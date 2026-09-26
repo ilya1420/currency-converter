@@ -6,25 +6,35 @@ use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 final class KrakenMarketDataProvider
 {
     public function __construct(private KrakenAssetMapper $mapper) {}
 
-    /** @return array{candles: list<array{time: int, open: string, high: string, low: string, close: string}>, ticker: array{last: string, open: string, high: string, low: string, volume: string, trades: int}, depth: array{bids: list<array>, asks: list<array>}, recentTrades: int} */
+    /** @return array{candles: list<array{time: int, open: string, high: string, low: string, close: string}>, ticker: array{last: string, high: string, low: string, volume: string, trades: int}, depth: array{bids: list<array>, asks: list<array>}} */
     public function snapshot(Currency $currency, int $interval): array
     {
         if ($currency->type() !== CurrencyType::CRYPTO) {
             throw new UnsupportedCurrencyPairException('Market charts are available for crypto assets only.');
         }
 
+        return Cache::remember(
+            "kraken-market:{$currency->value}:{$interval}",
+            now()->addSeconds(config('currency.kraken.market_data_ttl_seconds')),
+            fn (): array => $this->fetchSnapshot($currency, $interval),
+        );
+    }
+
+    /** @return array{candles: list<array{time: int, open: string, high: string, low: string, close: string}>, ticker: array{last: string, high: string, low: string, volume: string, trades: int}, depth: array{bids: list<array>, asks: list<array>}} */
+    private function fetchSnapshot(Currency $currency, int $interval): array
+    {
         $pair = $this->mapper->usdPair($currency);
         $params = ['pair' => $pair, 'assetVersion' => 1];
-        $ohlc = $this->first($this->request('OHLC', $params + ['interval' => $interval]));
-        $ticker = $this->first($this->request('Ticker', $params));
-        $depth = $this->first($this->request('Depth', $params + ['count' => 10]));
-        $trades = $this->first($this->request('Trades', $params));
+        $ohlc = $this->singlePairResult($this->request('OHLC', $params + ['interval' => $interval]));
+        $ticker = $this->singlePairResult($this->request('Ticker', $params));
+        $depth = $this->singlePairResult($this->request('Depth', $params + ['count' => 10]));
         $candles = array_values(array_filter($ohlc, 'is_array'));
 
         array_pop($candles); // Kraken always includes the unfinished current candle.
@@ -36,12 +46,11 @@ final class KrakenMarketDataProvider
                 'low' => (string) $candle[3], 'close' => (string) $candle[4],
             ], $candles),
             'ticker' => [
-                'last' => (string) ($ticker['c'][0] ?? '0'), 'open' => (string) ($ticker['o'] ?? '0'),
+                'last' => (string) ($ticker['c'][0] ?? '0'),
                 'high' => (string) ($ticker['h'][1] ?? '0'), 'low' => (string) ($ticker['l'][1] ?? '0'),
                 'volume' => (string) ($ticker['v'][1] ?? '0'), 'trades' => (int) ($ticker['t'][1] ?? 0),
             ],
             'depth' => ['bids' => $depth['bids'] ?? [], 'asks' => $depth['asks'] ?? []],
-            'recentTrades' => is_array($trades) ? count($trades) : 0,
         ];
     }
 
@@ -63,9 +72,13 @@ final class KrakenMarketDataProvider
         return $result;
     }
 
-    private function first(array $result): array
+    private function singlePairResult(array $result): array
     {
-        $value = reset($result);
+        if (count($result) !== 1) {
+            throw new ProviderException('Kraken returned unexpected market data.');
+        }
+
+        $value = array_values($result)[0];
 
         if (! is_array($value)) {
             throw new ProviderException('Kraken returned invalid market data.');

@@ -22,6 +22,11 @@ use Throwable;
 
 final class NbrbRateProvider implements RateProviderInterface
 {
+    public function source(): RateSource
+    {
+        return RateSource::NBRB;
+    }
+
     public function supports(Currency $from, Currency $to): bool
     {
         return $from !== Currency::BYN

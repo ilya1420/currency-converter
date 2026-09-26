@@ -50,6 +50,11 @@ class ConversionServiceTest extends TestCase
         {
             private array $rates = ['USD/BYN' => '3', 'EUR/BYN' => '4', 'BTC/USD' => '100', 'ETH/USD' => '50'];
 
+            public function source(): RateSource
+            {
+                return RateSource::NBRB;
+            }
+
             public function supports(Currency $from, Currency $to): bool
             {
                 return isset($this->rates["{$from->value}/{$to->value}"]);

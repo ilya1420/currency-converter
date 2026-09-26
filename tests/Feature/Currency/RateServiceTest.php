@@ -84,6 +84,11 @@ class RateServiceTest extends TestCase
 
             public function __construct(private string $rate, private ?ProviderException $exception) {}
 
+            public function source(): RateSource
+            {
+                return RateSource::NBRB;
+            }
+
             public function supports(Currency $from, Currency $to): bool
             {
                 return $from === Currency::USD && $to === Currency::BYN;

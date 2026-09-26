@@ -6,7 +6,11 @@ return [
         'rate_ttl_seconds' => (int) env('NBRB_RATE_TTL_SECONDS', 21600),
         'max_stale_age_seconds' => (int) env('NBRB_MAX_STALE_AGE_SECONDS', 604800),
     ],
-    'kraken' => ['rate_ttl_seconds' => (int) env('KRAKEN_RATE_TTL_SECONDS', 60), 'max_stale_age_seconds' => (int) env('KRAKEN_MAX_STALE_AGE_SECONDS', 86400)],
+    'kraken' => [
+        'rate_ttl_seconds' => (int) env('KRAKEN_RATE_TTL_SECONDS', 60),
+        'max_stale_age_seconds' => (int) env('KRAKEN_MAX_STALE_AGE_SECONDS', 86400),
+        'market_data_ttl_seconds' => (int) env('KRAKEN_MARKET_DATA_TTL_SECONDS', 15),
+    ],
     'http' => [
         'connect_timeout' => 3,
         'timeout' => 5,
