@@ -33,7 +33,26 @@ class ConversionEndpointTest extends TestCase
         $this->postJson('/conversion', ['amount' => '1', 'from' => 'USD', 'to' => 'BYN'])
             ->assertOk()
             ->assertJsonPath('isStale', true)
-            ->assertJsonPath('targetAmount', '3.120000000000000000');
+            ->assertJsonPath('targetAmount', '3.120000000000000000')
+            ->assertJsonPath('factorDisplay', '3.12')
+            ->assertJsonPath('sources.0', 'nbrb');
+    }
+
+    public function test_it_converts_usd_to_byn(): void
+    {
+        Http::fake([
+            'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response(
+                file_get_contents(base_path('tests/Fixtures/nbrb/nbrb-usd.json')),
+            ),
+        ]);
+
+        $this->postJson('/conversion', ['amount' => '1', 'from' => 'USD', 'to' => 'BYN'])
+            ->assertOk()
+            ->assertJsonPath('targetAmount', '3.120000000000000000')
+            ->assertJsonPath('targetDisplay', '3.12')
+            ->assertJsonPath('factor', '3.120000000000000000')
+            ->assertJsonPath('sources.0', 'nbrb')
+            ->assertJsonPath('isStale', false);
     }
 
     public function test_it_rejects_invalid_amounts_and_currencies(): void

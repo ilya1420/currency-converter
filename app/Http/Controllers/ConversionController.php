@@ -31,11 +31,16 @@ class ConversionController extends Controller
             return response()->json(['message' => 'This currency pair is not supported yet.'], 422);
         }
 
+        $factor = $amount === '0' ? '0' : $calculator->divide($result->targetAmount, $amount);
+        $sources = array_values(array_unique(array_map(static fn ($rate): string => $rate->source->value, $result->ratesUsed)));
+
         return response()->json([
             'sourceAmount' => $result->sourceAmount,
             'targetAmount' => $result->targetAmount,
             'targetDisplay' => $formatter->format($result->targetAmount, $result->to),
-            'factor' => $amount === '0' ? '0' : $calculator->divide($result->targetAmount, $amount),
+            'factor' => $factor,
+            'factorDisplay' => $formatter->format($factor, $result->to),
+            'sources' => $sources,
             'isStale' => $result->isStale,
             'updatedAt' => $result->rateUpdatedAt->format(DATE_ATOM),
         ]);
