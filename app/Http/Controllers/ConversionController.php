@@ -12,7 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-class ConversionController extends Controller
+final class ConversionController
 {
     public function __invoke(Request $request, ConversionService $converter, DecimalCalculator $calculator, AmountFormatter $formatter): JsonResponse
     {
