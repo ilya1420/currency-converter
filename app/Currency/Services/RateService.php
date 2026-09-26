@@ -9,7 +9,6 @@ use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
-use App\Currency\Providers\KrakenRateProvider;
 use App\Currency\Repositories\ExchangeRateRepository;
 use DateInterval;
 use DateTimeImmutable;
@@ -23,7 +22,7 @@ final class RateService
     public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
     {
         $provider = $this->providerFor($from, $to);
-        $source = $provider instanceof KrakenRateProvider ? RateSource::KRAKEN : RateSource::NBRB;
+        $source = $provider->source();
         $freshAfter = (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->ttl($source).'S'));
 
         if (! $forceRefresh && ($fresh = $this->rates->findFresh($source, $from, $to, $freshAfter))) {

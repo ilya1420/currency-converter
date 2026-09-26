@@ -286,14 +286,32 @@ window.converter = function converter(catalog) {
             if (!ticker || !bids.length || !asks.length) return null;
             const bidVolume = bids.reduce((total, level) => total + Number(level[1]), 0);
             const askVolume = asks.reduce((total, level) => total + Number(level[1]), 0);
+            const bidLiquidity = bids.reduce((total, [price, volume]) => total + Number(price) * Number(volume), 0);
+            const askLiquidity = asks.reduce((total, [price, volume]) => total + Number(price) * Number(volume), 0);
             const bestBid = Number(bids[0][0]); const bestAsk = Number(asks[0][0]);
             return {
-                change: ((Number(ticker.last) / Number(ticker.open || 1)) - 1) * 100,
+                change: this.rolling24hChange,
                 spread: ((bestAsk - bestBid) / bestBid) * 100,
                 imbalance: (bidVolume / (bidVolume + askVolume || 1)) * 100,
-                bidVolume,
-                askVolume,
+                liquidity: bidLiquidity + askLiquidity,
             };
+        },
+        get rolling24hChange() {
+            const candles = this.visibleChartCandles;
+            if (candles.length < 2) return null;
+            const last = candles.at(-1);
+            const targetTime = last.time - 24 * 60 * 60;
+            const baseline = candles.reduce((closest, candle) => (
+                Math.abs(candle.time - targetTime) < Math.abs(closest.time - targetTime) ? candle : closest
+            ));
+            const start = Number(baseline.close);
+            const end = Number(last.close);
+            return start && Number.isFinite(end) ? ((end / start) - 1) * 100 : null;
+        },
+        formatUsd(value) {
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1,
+            }).format(Number(value || 0));
         },
         get fiatStats() {
             const candles = this.chart?.source === 'NBRB' ? this.visibleChartCandles : [];
