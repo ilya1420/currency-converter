@@ -22,7 +22,7 @@ class ExchangeRateRepositoryTest extends TestCase
 
         $repository->save($rate);
 
-        $stored = $repository->findLatest(RateSource::NBRB, Currency::USD, Currency::BYN);
+        $stored = $repository->findLatest(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertSame($rate->rate, $stored?->rate);
         $this->assertSame($rate->fetchedAt->format(DATE_ATOM), $stored?->fetchedAt->format(DATE_ATOM));
@@ -35,7 +35,7 @@ class ExchangeRateRepositoryTest extends TestCase
         $repository->save($this->rate('3.15', '2026-09-24T11:00:00+00:00'));
 
         $this->assertSame(1, StoredExchangeRate::query()->count());
-        $this->assertSame('3.15', $repository->findLatest(RateSource::NBRB, Currency::USD, Currency::BYN)?->rate);
+        $this->assertSame('3.15', $repository->findLatest(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'))?->rate);
     }
 
     public function test_it_returns_only_a_fresh_rate(): void
@@ -43,12 +43,12 @@ class ExchangeRateRepositoryTest extends TestCase
         $repository = new ExchangeRateRepository;
         $repository->save($this->rate('3.12', '2026-09-24T10:00:00+00:00'));
 
-        $this->assertNull($repository->findFresh(RateSource::NBRB, Currency::USD, Currency::BYN, new DateTimeImmutable('2026-09-24T10:01:00+00:00')));
-        $this->assertNotNull($repository->findFresh(RateSource::NBRB, Currency::USD, Currency::BYN, new DateTimeImmutable('2026-09-24T09:59:00+00:00')));
+        $this->assertNull($repository->findFresh(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'), new DateTimeImmutable('2026-09-24T10:01:00+00:00')));
+        $this->assertNotNull($repository->findFresh(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'), new DateTimeImmutable('2026-09-24T09:59:00+00:00')));
     }
 
     private function rate(string $value, string $fetchedAt): ExchangeRate
     {
-        return new ExchangeRate(Currency::USD, Currency::BYN, $value, RateSource::NBRB, new DateTimeImmutable($fetchedAt));
+        return new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), $value, RateSource::NBRB, new DateTimeImmutable($fetchedAt));
     }
 }

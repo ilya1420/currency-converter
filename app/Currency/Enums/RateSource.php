@@ -6,4 +6,5 @@ enum RateSource: string
 {
     case NBRB = 'nbrb';
     case KRAKEN = 'kraken';
+    case COINGECKO = 'coingecko';
 }

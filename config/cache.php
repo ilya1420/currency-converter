@@ -1,7 +1,13 @@
 <?php
 
-// Framework maintenance commands need a cache driver; no application data is cached here.
 return [
-    'default' => 'array',
-    'stores' => ['array' => ['driver' => 'array']],
+    // Currency catalog and daily-change cache must never require the optional database cache table.
+    'default' => env('CURRENCY_CACHE_STORE', 'file'),
+    'stores' => [
+        'array' => ['driver' => 'array'],
+        'file' => [
+            'driver' => 'file',
+            'path' => storage_path('framework/cache/data'),
+        ],
+    ],
 ];

@@ -8,54 +8,62 @@ use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\ProviderRateLimitException;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\DecimalCalculator;
+use App\Currency\Services\ExternalApiClientFactory;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\RequestException;
-use Illuminate\Support\Facades\Http;
 use Throwable;
 
 final class NbrbRateProvider implements RateProviderInterface
 {
+    public function __construct(private ?ExternalApiClientFactory $clients = null) {}
+
+    /** @var array<mixed>|null */
+    private ?array $catalog = null;
+    private ?DateTimeImmutable $catalogFetchedAt = null;
+
+    public function source(): RateSource
+    {
+        return RateSource::NBRB;
+    }
+
     public function supports(Currency $from, Currency $to): bool
     {
-        return $from !== Currency::BYN
-            && $from->type() === CurrencyType::FIAT
-            && $to === Currency::BYN;
+        return $from->code !== 'BYN'
+            && $from->type === CurrencyType::FIAT
+            && $to->type === CurrencyType::FIAT
+            && $to->code === 'BYN';
     }
 
     public function getRate(Currency $from, Currency $to): ExchangeRate
     {
         if (! $this->supports($from, $to)) {
-            throw new UnsupportedCurrencyPairException("NBRB does not support {$from->value}/{$to->value}.");
+            throw new UnsupportedCurrencyPairException("NBRB does not support {$from->code}/{$to->code}.");
         }
 
         try {
-            $response = $this->request()->get('rates', ['periodicity' => 0]);
+            $records = $this->catalog();
         } catch (ConnectionException $exception) {
             throw new ProviderException('NBRB is unavailable.', previous: $exception);
         }
 
-        if ($response->failed()) {
-            throw new ProviderException("NBRB returned HTTP {$response->status()}.");
-        }
-
-        $record = $this->findCurrency($response->json(), $from);
+        $record = $this->findCurrency($records, $from);
 
         if ($record === null) {
-            throw new ProviderException("NBRB did not return {$from->value}.");
+            throw new ProviderException("NBRB did not return {$from->code}.");
         }
 
         $rate = $this->normalizeRate($record);
 
         return new ExchangeRate(
             $from,
-            Currency::BYN,
+            Currency::fiat('BYN'),
             $rate,
             RateSource::NBRB,
             new DateTimeImmutable,
@@ -63,26 +71,37 @@ final class NbrbRateProvider implements RateProviderInterface
         );
     }
 
-    private function request(): PendingRequest
+    private function request(): \Illuminate\Http\Client\PendingRequest
     {
-        return Http::baseUrl(config('currency.nbrb.base_url'))
-            ->acceptJson()
-            ->connectTimeout(config('currency.http.connect_timeout'))
-            ->timeout(config('currency.http.timeout'))
-            ->retry(
-                config('currency.http.retry_times'),
-                config('currency.http.retry_delay_ms'),
-                static fn (Throwable $exception): bool => $exception instanceof ConnectionException
-                    || ($exception instanceof RequestException && $exception->response->serverError()),
-                throw: false,
-            );
+        return ($this->clients ??= app(ExternalApiClientFactory::class))->for('nbrb');
+    }
+
+    /** @return array<mixed> */
+    private function catalog(): array
+    {
+        if ($this->catalog !== null && $this->catalogFetchedAt?->modify('+30 minutes') > new DateTimeImmutable) {
+            return $this->catalog;
+        }
+
+        $response = $this->request()->get('rates', ['periodicity' => 0]);
+        if ($response->status() === 429) {
+            throw new ProviderRateLimitException('NBRB rate limit reached.', is_numeric($response->header('Retry-After')) ? (int) $response->header('Retry-After') : null);
+        }
+        if ($response->failed() || ! is_array($response->json())) {
+            throw new ProviderResponseException("NBRB returned HTTP {$response->status()}.");
+        }
+
+        $this->catalog = $response->json();
+        $this->catalogFetchedAt = new DateTimeImmutable;
+
+        return $this->catalog;
     }
 
     /** @param array<mixed> $records */
     private function findCurrency(array $records, Currency $currency): ?array
     {
         foreach ($records as $record) {
-            if (is_array($record) && ($record['Cur_Abbreviation'] ?? null) === $currency->value) {
+            if (is_array($record) && ($record['Cur_Abbreviation'] ?? null) === $currency->code) {
                 return $record;
             }
         }

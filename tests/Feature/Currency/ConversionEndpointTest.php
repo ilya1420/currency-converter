@@ -27,7 +27,9 @@ class ConversionEndpointTest extends TestCase
 
     public function test_it_uses_a_saved_rate_when_offline(): void
     {
-        (new ExchangeRateRepository)->save(new ExchangeRate(Currency::USD, Currency::BYN, '3.12', RateSource::NBRB, (new DateTimeImmutable)->modify('-7 hours')));
+        (new ExchangeRateRepository)->save(new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), '3.12', RateSource::NBRB, (new DateTimeImmutable)->modify('-7 hours')));
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json'))]);
+        $this->getJson('/currencies')->assertOk();
         Http::fake(static fn (): never => throw new ConnectionException('offline'));
 
         $this->postJson('/conversion', ['amount' => '1', 'from' => 'USD', 'to' => 'BYN'])
@@ -57,8 +59,13 @@ class ConversionEndpointTest extends TestCase
 
     public function test_it_rejects_invalid_amounts_and_currencies(): void
     {
-        $this->postJson('/conversion', ['amount' => '1e3', 'from' => 'INVALID', 'to' => 'BYN'])
+        $this->postJson('/conversion', ['amount' => '1e3', 'from' => 'TOO-LONG-CODE', 'to' => 'BYN'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['amount', 'from']);
+    }
+
+    private function fixture(string $name): string
+    {
+        return (string) file_get_contents(base_path("tests/Fixtures/nbrb/{$name}"));
     }
 }

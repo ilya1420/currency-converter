@@ -11,10 +11,10 @@ final class AmountFormatter
 {
     public function format(string $amount, Currency $currency): string
     {
-        $scale = $currency->type() === CurrencyType::FIAT ? 2 : 8;
+        $scale = $currency->type === CurrencyType::FIAT ? 2 : 8;
         $formatted = BigDecimal::of($amount)->toScale($scale, RoundingMode::HalfUp)->__toString();
 
-        if ($currency->type() === CurrencyType::CRYPTO) {
+        if ($currency->type === CurrencyType::CRYPTO) {
             $formatted = rtrim(rtrim($formatted, '0'), '.');
         }
 

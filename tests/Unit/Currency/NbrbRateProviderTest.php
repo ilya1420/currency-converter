@@ -24,16 +24,16 @@ class NbrbRateProviderTest extends TestCase
 
     public function test_it_supports_only_non_byn_fiat_to_byn(): void
     {
-        $this->assertTrue($this->provider->supports(Currency::USD, Currency::BYN));
-        $this->assertFalse($this->provider->supports(Currency::BYN, Currency::USD));
-        $this->assertFalse($this->provider->supports(Currency::BTC, Currency::BYN));
+        $this->assertTrue($this->provider->supports(Currency::fiat('USD'), Currency::fiat('BYN')));
+        $this->assertFalse($this->provider->supports(Currency::fiat('BYN'), Currency::fiat('USD')));
+        $this->assertFalse($this->provider->supports(Currency::crypto('BTC'), Currency::fiat('BYN')));
     }
 
     public function test_it_returns_a_normalized_usd_to_byn_rate(): void
     {
         Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json'))]);
 
-        $rate = $this->provider->getRate(Currency::USD, Currency::BYN);
+        $rate = $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertSame('3.120000000000000000', $rate->rate);
         $this->assertSame(RateSource::NBRB, $rate->source);
@@ -45,7 +45,7 @@ class NbrbRateProviderTest extends TestCase
     {
         Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-rub-scale-100.json'))]);
 
-        $rate = $this->provider->getRate(Currency::RUB, Currency::BYN);
+        $rate = $this->provider->getRate(Currency::fiat('RUB'), Currency::fiat('BYN'));
 
         $this->assertSame('0.035000000000000000', $rate->rate);
     }
@@ -56,7 +56,7 @@ class NbrbRateProviderTest extends TestCase
 
         $this->expectException(ProviderException::class);
 
-        $this->provider->getRate(Currency::USD, Currency::BYN);
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
     }
 
     public function test_it_rejects_an_unsupported_direction_without_a_request(): void
@@ -64,7 +64,7 @@ class NbrbRateProviderTest extends TestCase
         Http::fake();
 
         try {
-            $this->provider->getRate(Currency::BYN, Currency::USD);
+            $this->provider->getRate(Currency::fiat('BYN'), Currency::fiat('USD'));
             $this->fail('Expected unsupported pair exception.');
         } catch (UnsupportedCurrencyPairException) {
             Http::assertNothingSent();
