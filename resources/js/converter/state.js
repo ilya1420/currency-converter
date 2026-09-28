@@ -2,7 +2,7 @@ import { cryptoFallbackColor, currencyMeta, fiatFallbackColor } from './currency
 import { formatAmount as formatDecimalAmount } from './decimal.js';
 import { currencyApi } from './api.js';
 import { converterStorage } from './storage.js';
-import { converterSlice } from './state/converter-slice.js';
+import { converterSlice, row } from './state/converter-slice.js';
 import { chartSlice } from './state/chart-slice.js';
 import { gestureSlice } from './state/gesture-slice.js';
 import { uiSlice } from './state/ui-slice.js';
@@ -38,9 +38,30 @@ export function createConverterState(catalog) {
         initializeLayout() {
             const saved = converterStorage.loadLayout();
             if (saved && Array.isArray(saved.rows)) {
-                this.base = saved.activeCurrency || saved.base || this.base; this.keyboardVisible = saved.keyboardVisible !== false;
-                const currencies = [...new Set([saved.base, ...saved.rows.map(({ currency }) => currency)].filter((currency) => this.meta[currency]))];
-                if (currencies.length) { this.rows = currencies.map((currency, index) => row(index + 1, currency)); this.nextId = this.rows.length + 1; }
+                const savedBase = saved.activeCurrency || saved.base || this.base;
+                const currencies = [...new Set([
+                    savedBase,
+                    ...saved.rows.map(({ currency }) => currency),
+                ].filter((currency) => typeof currency === 'string' && currency.length > 0))];
+
+                // A provider can temporarily omit a previously selected asset. Keep the
+                // user's layout and create fallback metadata instead of silently dropping it.
+                currencies.forEach((currency) => {
+                    if (this.meta[currency]) return;
+                    const type = this.catalog.find(({ code }) => code === currency)?.type || 'fiat';
+                    this.meta[currency] = {
+                        label: currency,
+                        name: currency,
+                        color: type === 'crypto' ? cryptoFallbackColor(currency) : fiatFallbackColor(currency),
+                    };
+                });
+
+                this.base = savedBase;
+                this.keyboardVisible = saved.keyboardVisible !== false;
+                if (currencies.length) {
+                    this.rows = currencies.map((currency, index) => row(index + 1, currency));
+                    this.nextId = this.rows.length + 1;
+                }
             }
             if (!this.rows.some((item) => item.currency === this.base)) this.base = this.rows[0]?.currency || 'USD';
             void this.loadAll();
