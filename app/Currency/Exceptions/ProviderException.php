@@ -4,4 +4,4 @@ namespace App\Currency\Exceptions;
 
 use RuntimeException;
 
-final class ProviderException extends RuntimeException {}
+class ProviderException extends RuntimeException {}

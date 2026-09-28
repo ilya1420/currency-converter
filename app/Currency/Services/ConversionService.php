@@ -15,11 +15,11 @@ final class ConversionService
 
     public function convert(string $amount, Currency $from, Currency $to, bool $forceRefresh = false): ConversionResult
     {
-        if ($from === $to) {
+        if ($from->equals($to)) {
             return new ConversionResult($from, $to, $amount, $amount, new DateTimeImmutable, false);
         }
 
-        [$targetAmount, $ratesUsed] = match ([$from->type(), $to->type()]) {
+        [$targetAmount, $ratesUsed] = match ([$from->type, $to->type]) {
             [CurrencyType::FIAT, CurrencyType::FIAT] => $this->fiatToFiat($amount, $from, $to, $forceRefresh),
             [CurrencyType::CRYPTO, CurrencyType::FIAT] => $this->cryptoToFiat($amount, $from, $to, $forceRefresh),
             [CurrencyType::FIAT, CurrencyType::CRYPTO] => $this->fiatToCrypto($amount, $from, $to, $forceRefresh),
@@ -49,11 +49,12 @@ final class ConversionService
     /** @return array{string, list<ExchangeRate>} */
     private function cryptoToFiat(string $amount, Currency $from, Currency $to, bool $forceRefresh): array
     {
-        $cryptoRate = $this->rates->getRate($from, Currency::USD, $forceRefresh);
-        if ($to === Currency::USD) {
+        $usd = Currency::fiat('USD');
+        $cryptoRate = $this->rates->getRate($from, $usd, $forceRefresh);
+        if ($to->code === 'USD') {
             return [$this->calculator->multiply($amount, $cryptoRate->rate), [$cryptoRate]];
         }
-        $usdByn = $this->fiatToByn(Currency::USD, $forceRefresh);
+        $usdByn = $this->fiatToByn($usd, $forceRefresh);
         $targetByn = $this->fiatToByn($to, $forceRefresh);
 
         return [$this->calculator->convertThroughBase($this->calculator->multiply($amount, $cryptoRate->rate), $usdByn->rate, $targetByn->rate), [$cryptoRate, $usdByn, $targetByn]];
@@ -63,8 +64,9 @@ final class ConversionService
     private function fiatToCrypto(string $amount, Currency $from, Currency $to, bool $forceRefresh): array
     {
         $sourceByn = $this->fiatToByn($from, $forceRefresh);
-        $usdByn = $this->fiatToByn(Currency::USD, $forceRefresh);
-        $cryptoRate = $this->rates->getRate($to, Currency::USD, $forceRefresh);
+        $usd = Currency::fiat('USD');
+        $usdByn = $this->fiatToByn($usd, $forceRefresh);
+        $cryptoRate = $this->rates->getRate($to, $usd, $forceRefresh);
         $usd = $this->calculator->convertThroughBase($amount, $sourceByn->rate, $usdByn->rate);
 
         return [$this->calculator->divide($usd, $cryptoRate->rate), [$sourceByn, $usdByn, $cryptoRate]];
@@ -73,16 +75,19 @@ final class ConversionService
     /** @return array{string, list<ExchangeRate>} */
     private function cryptoToCrypto(string $amount, Currency $from, Currency $to, bool $forceRefresh): array
     {
-        $sourceRate = $this->rates->getRate($from, Currency::USD, $forceRefresh);
-        $targetRate = $this->rates->getRate($to, Currency::USD, $forceRefresh);
+        $usd = Currency::fiat('USD');
+        $sourceRate = $this->rates->getRate($from, $usd, $forceRefresh);
+        $targetRate = $this->rates->getRate($to, $usd, $forceRefresh);
 
         return [$this->calculator->convertThroughBase($amount, $sourceRate->rate, $targetRate->rate), [$sourceRate, $targetRate]];
     }
 
     private function fiatToByn(Currency $currency, bool $forceRefresh): ExchangeRate
     {
-        return $currency === Currency::BYN
-            ? new ExchangeRate(Currency::BYN, Currency::BYN, '1', RateSource::NBRB, new DateTimeImmutable)
-            : $this->rates->getRate($currency, Currency::BYN, $forceRefresh);
+        $byn = Currency::fiat('BYN');
+
+        return $currency->code === 'BYN'
+            ? new ExchangeRate($byn, $byn, '1', RateSource::NBRB, new DateTimeImmutable)
+            : $this->rates->getRate($currency, $byn, $forceRefresh);
     }
 }

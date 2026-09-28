@@ -16,25 +16,14 @@ class CurrencyDomainTest extends TestCase
     #[DataProvider('currencies')]
     public function test_currency_has_the_expected_type(Currency $currency, CurrencyType $type): void
     {
-        $this->assertSame($type, $currency->type());
+        $this->assertSame($type, $currency->type);
     }
 
     public static function currencies(): array
     {
         return [
-            'Belarusian ruble' => [Currency::BYN, CurrencyType::FIAT],
-            'US dollar' => [Currency::USD, CurrencyType::FIAT],
-            'Euro' => [Currency::EUR, CurrencyType::FIAT],
-            'Polish zloty' => [Currency::PLN, CurrencyType::FIAT],
-            'British pound' => [Currency::GBP, CurrencyType::FIAT],
-            'Chinese yuan' => [Currency::CNY, CurrencyType::FIAT],
-            'Russian ruble' => [Currency::RUB, CurrencyType::FIAT],
-            'Ukrainian hryvnia' => [Currency::UAH, CurrencyType::FIAT],
-            'Bitcoin' => [Currency::BTC, CurrencyType::CRYPTO],
-            'Ether' => [Currency::ETH, CurrencyType::CRYPTO],
-            'Tether' => [Currency::USDT, CurrencyType::CRYPTO],
-            'Solana' => [Currency::SOL, CurrencyType::CRYPTO],
-            'XRP' => [Currency::XRP, CurrencyType::CRYPTO],
+            'Belarusian ruble' => [Currency::fiat('BYN'), CurrencyType::FIAT], 'US dollar' => [Currency::fiat('USD'), CurrencyType::FIAT], 'Euro' => [Currency::fiat('EUR'), CurrencyType::FIAT], 'Polish zloty' => [Currency::fiat('PLN'), CurrencyType::FIAT], 'British pound' => [Currency::fiat('GBP'), CurrencyType::FIAT], 'Chinese yuan' => [Currency::fiat('CNY'), CurrencyType::FIAT], 'Russian ruble' => [Currency::fiat('RUB'), CurrencyType::FIAT], 'Ukrainian hryvnia' => [Currency::fiat('UAH'), CurrencyType::FIAT],
+            'Bitcoin' => [Currency::crypto('BTC'), CurrencyType::CRYPTO], 'Ether' => [Currency::crypto('ETH'), CurrencyType::CRYPTO], 'Tether' => [Currency::crypto('USDT'), CurrencyType::CRYPTO], 'Solana' => [Currency::crypto('SOL'), CurrencyType::CRYPTO], 'XRP' => [Currency::crypto('XRP'), CurrencyType::CRYPTO],
         ];
     }
 
@@ -44,8 +33,7 @@ class CurrencyDomainTest extends TestCase
         $publishedAt = new DateTimeImmutable('2026-09-24T00:00:00+00:00');
 
         $rate = new ExchangeRate(
-            Currency::USD,
-            Currency::BYN,
+            Currency::fiat('USD'), Currency::fiat('BYN'),
             '3.12345678',
             RateSource::NBRB,
             $fetchedAt,
@@ -61,16 +49,14 @@ class CurrencyDomainTest extends TestCase
     {
         $updatedAt = new DateTimeImmutable('2026-09-24T10:00:00+00:00');
         $rate = new ExchangeRate(
-            Currency::BTC,
-            Currency::USD,
+            Currency::crypto('BTC'), Currency::fiat('USD'),
             '112000.12345678',
             RateSource::KRAKEN,
             $updatedAt,
         );
 
         $result = new ConversionResult(
-            Currency::BTC,
-            Currency::USD,
+            Currency::crypto('BTC'), Currency::fiat('USD'),
             '0.5',
             '56000.06172839',
             $updatedAt,

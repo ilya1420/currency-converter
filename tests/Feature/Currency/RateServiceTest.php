@@ -24,7 +24,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', new DateTimeImmutable));
         $provider = $this->provider();
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::USD, Currency::BYN);
+        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertSame(0, $provider->calls);
         $this->assertFalse($rate->isStale);
@@ -36,7 +36,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', (new DateTimeImmutable)->modify('-7 hours')));
         $provider = $this->provider('3.15');
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::USD, Currency::BYN);
+        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertSame(1, $provider->calls);
         $this->assertSame('3.15', $rate->rate);
@@ -48,7 +48,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', new DateTimeImmutable));
         $provider = $this->provider('3.15');
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::USD, Currency::BYN, true);
+        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
 
         $this->assertSame(1, $provider->calls);
         $this->assertSame('3.15', $rate->rate);
@@ -60,7 +60,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', (new DateTimeImmutable)->modify('-7 hours')));
         $provider = $this->provider(exception: new ProviderException('offline'));
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::USD, Currency::BYN);
+        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertTrue($rate->isStale);
     }
@@ -68,12 +68,12 @@ class RateServiceTest extends TestCase
     public function test_provider_failure_without_cache_throws(): void
     {
         $this->expectException(RateUnavailableException::class);
-        (new RateService(new ExchangeRateRepository, [$this->provider(exception: new ProviderException('offline'))]))->getRate(Currency::USD, Currency::BYN);
+        (new RateService(new ExchangeRateRepository, [$this->provider(exception: new ProviderException('offline'))]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
     }
 
     private function rate(string $value, DateTimeImmutable $fetchedAt): ExchangeRate
     {
-        return new ExchangeRate(Currency::USD, Currency::BYN, $value, RateSource::NBRB, $fetchedAt);
+        return new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), $value, RateSource::NBRB, $fetchedAt);
     }
 
     private function provider(string $rate = '3.15', ?ProviderException $exception = null): RateProviderInterface
@@ -91,7 +91,7 @@ class RateServiceTest extends TestCase
 
             public function supports(Currency $from, Currency $to): bool
             {
-                return $from === Currency::USD && $to === Currency::BYN;
+                return $from->code === 'USD' && $to->code === 'BYN';
             }
 
             public function getRate(Currency $from, Currency $to): ExchangeRate

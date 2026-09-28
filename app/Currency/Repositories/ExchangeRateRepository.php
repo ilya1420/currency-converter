@@ -13,7 +13,7 @@ final class ExchangeRateRepository
     public function save(ExchangeRate $rate): ExchangeRate
     {
         StoredExchangeRate::query()->updateOrCreate(
-            ['provider' => $rate->source->value, 'from_currency' => $rate->from->value, 'to_currency' => $rate->to->value],
+            ['provider' => $rate->source->value, 'from_currency' => $rate->from->code, 'to_currency' => $rate->to->code],
             ['rate' => $rate->rate, 'fetched_at' => $rate->fetchedAt, 'published_at' => $rate->publishedAt],
         );
 
@@ -24,8 +24,8 @@ final class ExchangeRateRepository
     {
         return $this->map(StoredExchangeRate::query()->where([
             'provider' => $source->value,
-            'from_currency' => $from->value,
-            'to_currency' => $to->value,
+            'from_currency' => $from->code,
+            'to_currency' => $to->code,
         ])->first());
     }
 
@@ -33,16 +33,21 @@ final class ExchangeRateRepository
     {
         return $this->map(StoredExchangeRate::query()->where([
             'provider' => $source->value,
-            'from_currency' => $from->value,
-            'to_currency' => $to->value,
+            'from_currency' => $from->code,
+            'to_currency' => $to->code,
         ])->where('fetched_at', '>=', $freshAfter)->first());
     }
 
     private function map(?StoredExchangeRate $stored): ?ExchangeRate
     {
         return $stored === null ? null : new ExchangeRate(
-            Currency::from($stored->from_currency), Currency::from($stored->to_currency), $stored->rate,
+            $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
             RateSource::from($stored->provider), $stored->fetched_at, $stored->published_at,
         );
+    }
+
+    private function currency(string $code, RateSource $source, bool $from): Currency
+    {
+        return in_array($source, [RateSource::KRAKEN, RateSource::COINGECKO], true) && $from ? Currency::crypto($code) : Currency::fiat($code);
     }
 }

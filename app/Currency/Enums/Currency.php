@@ -2,39 +2,29 @@
 
 namespace App\Currency\Enums;
 
-enum Currency: string
+final readonly class Currency
 {
-    case BYN = 'BYN';
-    case USD = 'USD';
-    case EUR = 'EUR';
-    case PLN = 'PLN';
-    case GBP = 'GBP';
-    case CNY = 'CNY';
-    case RUB = 'RUB';
-    case UAH = 'UAH';
+    public function __construct(
+        public string $code,
+        public CurrencyType $type,
+        public ?string $providerSymbol = null,
+        public ?string $name = null,
+        public ?string $coinGeckoId = null,
+        public ?string $group = null,
+    ) {}
 
-    case BTC = 'BTC';
-    case ETH = 'ETH';
-    case USDT = 'USDT';
-    case SOL = 'SOL';
-    case XRP = 'XRP';
-
-    public function type(): CurrencyType
+    public static function fiat(string $code): self
     {
-        return match ($this) {
-            self::BYN,
-            self::USD,
-            self::EUR,
-            self::PLN,
-            self::GBP,
-            self::CNY,
-            self::RUB,
-            self::UAH => CurrencyType::FIAT,
-            self::BTC,
-            self::ETH,
-            self::USDT,
-            self::SOL,
-            self::XRP => CurrencyType::CRYPTO,
-        };
+        return new self(strtoupper($code), CurrencyType::FIAT);
+    }
+
+    public static function crypto(string $code, ?string $providerSymbol = null): self
+    {
+        return new self(strtoupper($code), CurrencyType::CRYPTO, $providerSymbol);
+    }
+
+    public function equals(self $other): bool
+    {
+        return $this->code === $other->code && $this->type === $other->type;
     }
 }
