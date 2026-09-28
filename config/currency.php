@@ -47,6 +47,7 @@ return [
         'base_url' => env('KRAKEN_API_BASE_URL', 'https://api.kraken.com/0/public'),
         'rate_ttl_seconds' => (int) env('KRAKEN_RATE_TTL_SECONDS', 60),
         'max_stale_age_seconds' => (int) env('KRAKEN_MAX_STALE_AGE_SECONDS', 86400),
+        'market_data_ttl_seconds' => (int) env('KRAKEN_MARKET_DATA_TTL_SECONDS', 15),
     ],
     'coingecko' => [
         'base_url' => env('COINGECKO_API_BASE_URL', 'https://api.coingecko.com/api/v3'),
