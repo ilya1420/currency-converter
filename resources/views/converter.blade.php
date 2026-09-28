@@ -57,11 +57,11 @@
                             </svg>
                         </button>
                         <button
-                            class="grid h-12 w-12 shrink-0 place-items-center transition active:scale-95"
-                            :class="currencyType(row.currency) === 'crypto' ? 'rounded-full' : 'rounded-2xl border border-white/15 shadow-lg shadow-black/20 ring-1 ring-white/5'"
-                            :style="meta[row.currency].icon || meta[row.currency].flag ? {} : { background: meta[row.currency].color }" @click.stop="openPicker(row.id)"
+                            class="currency-icon h-12 w-12 shrink-0 transition active:scale-95"
+                            :class="currencyType(row.currency) === 'crypto' ? 'currency-icon-crypto' : 'currency-icon-fiat'"
+                            :style="{ background: meta[row.currency].color }" @click.stop="openPicker(row.id)"
                             :aria-label="`Изменить валюту строки ${index + 1}`">
-                            <img x-show="meta[row.currency].icon || meta[row.currency].flag" x-cloak :src="meta[row.currency].icon || meta[row.currency].flag" class="h-12 w-12" :class="currencyType(row.currency) === 'crypto' ? 'object-contain' : 'object-cover'" :alt="meta[row.currency].label">
+                            <img x-show="meta[row.currency].icon || meta[row.currency].flag" x-cloak :src="meta[row.currency].icon || meta[row.currency].flag" class="h-full w-full" :alt="meta[row.currency].label">
                             <span x-show="!meta[row.currency].icon && !meta[row.currency].flag" class="max-w-9 truncate text-center font-black text-white" :class="badgeTextClass(row.currency)" x-text="badgeText(row.currency)"></span>
                         </button>
                         <div class="w-20 shrink-0"><p class="truncate text-left text-base font-semibold" x-text="meta[row.currency].label"></p><p class="truncate text-[10px] text-zinc-500" x-text="currencyName(row.currency)"></p><p class="text-[10px] font-semibold" :class="dailyChangeClass(row.currency)" x-text="dailyChangeLabel(row.currency)"></p></div>
@@ -199,9 +199,9 @@
                                 :class="pickerTarget === 'add' && isSelected(currency) ? 'bg-fuchsia-500/10' : ''"
                                 @click="chooseCurrency(currency)" :disabled="!canChoose(currency)"><span
                                     class="grid h-11 w-11 shrink-0 place-items-center"
-                                    :class="currencyType(currency) === 'crypto' ? 'rounded-full' : 'rounded-2xl border border-white/15 shadow-md shadow-black/20 ring-1 ring-white/5'"
-                                    :style="meta[currency].icon || meta[currency].flag ? {} : { background: meta[currency].color }"><img x-show="meta[currency].icon || meta[currency].flag" x-cloak loading="lazy" decoding="async"
-                                                                                       :src="meta[currency].icon || meta[currency].flag" class="h-11 w-11" :class="currencyType(currency) === 'crypto' ? 'object-contain' : 'object-cover'" :alt="meta[currency].label"><span
+                                    :class="['currency-icon', currencyType(currency) === 'crypto' ? 'currency-icon-crypto' : 'currency-icon-fiat']"
+                                    :style="{ background: meta[currency].color }"><img x-show="meta[currency].icon || meta[currency].flag" x-cloak loading="lazy" decoding="async"
+                                                                                       :src="meta[currency].icon || meta[currency].flag" class="h-full w-full" :alt="meta[currency].label"><span
                                         x-show="!meta[currency].icon && !meta[currency].flag" class="max-w-9 truncate text-center font-black text-white" :class="badgeTextClass(currency)" x-text="badgeText(currency)"></span></span><span
                                     class="min-w-0 flex-1"><span class="block truncate font-semibold" x-text="meta[currency].label"></span><span class="block truncate text-[11px] text-zinc-500" x-text="currencyName(currency)"></span></span><span
                                     class="text-sm text-fuchsia-300" x-text="pickerTarget === 'add' && isSelected(currency) ? 'Убрать' : (isSelected(currency) ? '✓' : '')"></span>

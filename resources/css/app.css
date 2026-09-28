@@ -12,3 +12,48 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
     --font-amount: ui-rounded, 'SF Pro Rounded', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
 }
+
+.currency-icon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.currency-icon::after {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: inherit;
+    content: '';
+    pointer-events: none;
+}
+
+.currency-icon-fiat {
+    border-radius: 15px;
+    padding: 5px;
+    box-shadow: 0 8px 18px rgb(0 0 0 / 0.24), inset 0 1px rgb(255 255 255 / 0.12);
+}
+
+.currency-icon-fiat img {
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    object-fit: cover;
+    filter: saturate(0.92) contrast(1.04);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.14);
+}
+
+.currency-icon-crypto {
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: 0 8px 18px rgb(0 0 0 / 0.22), inset 0 1px rgb(255 255 255 / 0.2);
+}
+
+.currency-icon-crypto img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
