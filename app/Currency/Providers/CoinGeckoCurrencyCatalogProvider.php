@@ -12,7 +12,7 @@ use App\Currency\Services\CurrencyCache;
 use App\Currency\Services\ExternalApiClientFactory;
 use Illuminate\Http\Client\ConnectionException;
 
-/** Supplies names, stable/meme grouping and CoinGecko IDs for the liquid asset universe. */
+/** Supplies names, popularity grouping and CoinGecko IDs for the liquid asset universe. */
 final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderInterface
 {
     public function __construct(private CurrencyCache $cache, private ExternalApiClientFactory $clients) {}
@@ -27,8 +27,6 @@ final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderI
     {
         try {
             $market = $this->request('coins/markets', ['vs_currency' => 'usd', 'order' => 'market_cap_desc', 'per_page' => 250, 'page' => 1]);
-            $stable = $this->idsForCategory('stablecoins');
-            $meme = $this->idsForCategory('meme-token');
         } catch (ConnectionException $exception) {
             throw new ProviderException('CoinGecko currency catalog is unavailable.', previous: $exception);
         }
@@ -38,7 +36,8 @@ final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderI
         }
 
         $currencies = [];
-        foreach ($market as $asset) {
+        $popularLimit = max(1, (int) config('currency.catalog.popular_limit', 25));
+        foreach ($market as $rank => $asset) {
             $id = is_array($asset) ? $asset['id'] ?? null : null;
             $symbol = is_array($asset) ? $asset['symbol'] ?? null : null;
             $name = is_array($asset) ? $asset['name'] ?? null : null;
@@ -53,22 +52,11 @@ final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderI
                 continue;
             }
 
-            $group = in_array($id, $stable, true) ? 'stable' : (in_array($id, $meme, true) ? 'meme' : 'alt');
+            $group = $rank < $popularLimit ? 'popular' : 'other';
             $currencies[$code] = new CurrencyDefinition($code, CurrencyType::CRYPTO, null, is_string($name) ? $name : null, $id, $group);
         }
 
         return array_values($currencies);
-    }
-
-    /** @return list<string> */
-    private function idsForCategory(string $category): array
-    {
-        $assets = $this->request('coins/markets', ['vs_currency' => 'usd', 'category' => $category, 'per_page' => 250, 'page' => 1]);
-        if (! is_array($assets)) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map(static fn (mixed $asset): mixed => is_array($asset) ? ($asset['id'] ?? null) : null, $assets), 'is_string'));
     }
 
     /** @return array<mixed> */

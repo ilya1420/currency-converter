@@ -12,7 +12,7 @@ class CurrencyCatalogTest extends TestCase
 {
     public function test_byn_is_available_when_remote_catalogs_are_empty(): void
     {
-        Cache::forget('currency-catalog:v3');
+        Cache::forget('currency-catalog:v5');
 
         $catalog = new CurrencyCatalog([new class implements CurrencyCatalogProviderInterface
         {
@@ -23,8 +23,10 @@ class CurrencyCatalogTest extends TestCase
         }]);
 
         $currency = $catalog->resolve('BYN', 'fiat');
+        $usd = $catalog->resolve('USD', 'fiat');
 
         $this->assertSame('BYN', $currency->code);
         $this->assertSame(CurrencyType::FIAT, $currency->type);
+        $this->assertSame('USD', $usd->code);
     }
 }

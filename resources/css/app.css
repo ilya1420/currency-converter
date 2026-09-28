@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+@font-face {
+    font-family: 'Inter Local';
+    src: url('/fonts/InterVariable.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
 [x-cloak] {
     display: none !important;
 }
@@ -10,50 +18,32 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-amount: ui-rounded, 'SF Pro Rounded', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+    --font-amount: 'Inter Local', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-.currency-icon {
-    position: relative;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    isolation: isolate;
-}
-
-.currency-icon::after {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    border: 1px solid rgb(255 255 255 / 0.16);
-    border-radius: inherit;
-    content: '';
-    pointer-events: none;
+.font-amount {
+    font-family: var(--font-amount);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
 }
 
 .currency-icon-fiat {
-    border-radius: 15px;
-    padding: 5px;
-    box-shadow: 0 8px 18px rgb(0 0 0 / 0.24), inset 0 1px rgb(255 255 255 / 0.12);
+    position: relative;
+    display: grid;
+    place-items: center;
 }
 
 .currency-icon-fiat img {
     width: 100%;
-    height: 100%;
+    height: auto;
+    aspect-ratio: 1.2;
+    border: 1px solid rgb(255 255 255 / 0.18);
     border-radius: 10px;
     object-fit: cover;
-    filter: saturate(0.92) contrast(1.04);
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.14);
-}
-
-.currency-icon-crypto {
-    border-radius: 999px;
-    padding: 4px;
-    box-shadow: 0 8px 18px rgb(0 0 0 / 0.22), inset 0 1px rgb(255 255 255 / 0.2);
-}
-
-.currency-icon-crypto img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+    filter: saturate(1.04) contrast(1.04);
+    box-shadow:
+        0 1px 0 rgb(255 255 255 / 0.22) inset,
+        0 -1px 0 rgb(0 0 0 / 0.16) inset,
+        0 3px 0 -1px rgb(0 0 0 / 0.18),
+        0 6px 12px rgb(0 0 0 / 0.28);
 }

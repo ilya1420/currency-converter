@@ -10,8 +10,28 @@ export const chartMethods = {
         this.buzz();
         if (tab === 'charts') await this.loadChart();
     },
-    get chartCurrencies() { return this.currencies.filter((currency) => currency !== 'BYN'); },
+    get allChartCurrencies() {
+        return this.currencies.filter((currency) => {
+            if (currency === 'BYN') return false;
+            return this.chartMarket === 'crypto' ? !this.isFiatCurrency(currency) : this.isFiatCurrency(currency);
+        });
+    },
+    get chartCurrencies() {
+        const query = this.chartSearch.trim().toLowerCase();
+        if (!query) return this.allChartCurrencies;
+        return this.allChartCurrencies.filter((currency) => `${currency} ${this.currencyName(currency)}`.toLowerCase().includes(query));
+    },
     isFiatCurrency(currency) { return !isCrypto(this.catalog, currency); },
+    async setChartMarket(market) {
+        this.chartMarket = market;
+        this.chartSearch = '';
+        const currencies = this.allChartCurrencies;
+        if (!currencies.includes(this.chartCurrency)) {
+            this.chartCurrency = currencies[0] || (market === 'crypto' ? 'BTC' : 'USD');
+        }
+        this.chartInterval = this.isFiatCurrency(this.chartCurrency) ? 30 : 60;
+        await this.loadChart();
+    },
     get chartIntervals() { return this.isFiatCurrency(this.chartCurrency) ? FIAT_INTERVALS : CRYPTO_INTERVALS; },
     async selectChartCurrency(currency) {
         this.chartCurrency = currency;
@@ -51,12 +71,10 @@ export const chartMethods = {
         };
     },
     chartAxisValue(value) {
-        const range = this.chartRange;
         const magnitude = Math.abs(Number(value || 0));
-        const span = range ? Math.abs(range.high - range.low) : 0;
         const digits = this.chart?.source === 'NBRB'
-            ? Math.min(6, Math.max(2, span < 0.01 ? 6 : span < 1 ? 4 : 2))
-            : Math.min(8, Math.max(2, magnitude < 0.0001 || span < 0.0001 ? 8 : magnitude < 0.01 || span < 0.01 ? 6 : magnitude < 1 ? 4 : 2));
+            ? Math.min(6, Math.max(2, magnitude < 0.01 ? 6 : magnitude < 1 ? 4 : 2))
+            : Math.min(8, Math.max(2, magnitude < 0.0001 ? 8 : magnitude < 0.01 ? 6 : magnitude < 1 ? 4 : 2));
         return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value || 0);
     },
     get chartYLabels() {
@@ -82,6 +100,11 @@ export const chartMethods = {
         if (this.chart?.source === 'NBRB') return `Официальный курс · ${count} публикаций`;
         return `${{ 60: '1H', 240: '4H', 1440: '1D' }[this.chartInterval] || ''} · ${count} свечей`;
     },
+    get chartQuoteLabel() {
+        if (this.chart?.source === 'NBRB') return `Официальный курс · BYN за 1 ${this.chartCurrency}`;
+        return `Рыночная цена · USD за 1 ${this.chartCurrency}`;
+    },
+    get chartQuoteCurrency() { return this.chart?.source === 'NBRB' ? 'BYN' : 'USD'; },
     get chartChange() {
         const candles = this.visibleChartCandles;
         if (candles.length < 2) return null;

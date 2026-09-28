@@ -10,7 +10,7 @@ function listState() {
             { code: 'EUR', type: 'fiat', name: 'Евро' },
             { code: 'BTC', type: 'crypto', name: 'Bitcoin', group: 'alt' },
         ],
-        cryptoGroups: { stable: true, meme: true, alt: true, other: true },
+        cryptoGroups: { fiat: true, stable: true, meme: true, alt: true, other: true },
         rows: [
             { id: 1, currency: 'USD', previousCurrency: 'USD', result: '100', error: '' },
             { id: 2, currency: 'EUR', previousCurrency: 'EUR', result: '92', error: '' },
@@ -62,4 +62,19 @@ test('currency search matches both code and localized name', () => {
 
     state.pickerSearch = 'eur';
     assert.deepEqual(state.filteredCurrencies(['USD', 'EUR']), ['EUR']);
+});
+
+test('ordinary currencies can be hidden like any other group', () => {
+    const state = listState();
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = { setItem() {} };
+
+    try {
+        assert.deepEqual(state.currencyGroups.find(({ key }) => key === 'fiat').items, ['USD', 'EUR']);
+        state.toggleCryptoGroup('fiat');
+
+        assert.deepEqual(state.currencyGroups.find(({ key }) => key === 'fiat').items, []);
+    } finally {
+        globalThis.localStorage = previousStorage;
+    }
 });

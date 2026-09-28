@@ -3,15 +3,19 @@ import { converterStorage } from './storage.js';
 export const currencyListMethods = {
     get currencyGroups() {
         const crypto = this.catalog.filter(({ type }) => type === 'crypto');
+        const visible = (key) => this.cryptoGroups[key] !== false;
         return [
-            { title: 'Фиат', key: 'fiat', items: this.catalog.filter(({ type }) => type === 'fiat').map(({ code }) => code) },
-            { title: 'Стейблкоины', key: 'stable', items: this.cryptoGroups.stable ? crypto.filter(({ group }) => group === 'stable').map(({ code }) => code) : [] },
-            { title: 'Мемы', key: 'meme', items: this.cryptoGroups.meme ? crypto.filter(({ group }) => group === 'meme').map(({ code }) => code) : [] },
-            { title: 'Альткоины', key: 'alt', items: this.cryptoGroups.alt ? crypto.filter(({ group }) => group === 'alt').map(({ code }) => code) : [] },
-            { title: 'Без категории', key: 'other', items: this.cryptoGroups.other ? crypto.filter(({ group }) => !group).map(({ code }) => code) : [] },
+            { title: 'Обычные валюты', key: 'fiat', type: 'fiat', items: visible('fiat') ? this.catalog.filter(({ type }) => type === 'fiat').map(({ code }) => code) : [] },
+            { title: 'Популярные', key: 'popular', type: 'crypto', items: visible('popular') ? crypto.filter(({ group }) => group === 'popular').map(({ code }) => code) : [] },
+            { title: 'Все остальные', key: 'other', type: 'crypto', items: visible('other') ? crypto.filter(({ group }) => group !== 'popular').map(({ code }) => code) : [] },
         ];
     },
-    get cryptoGroupFilters() { return [{ key: 'stable', label: 'Стейбл' }, { key: 'meme', label: 'Мемы' }, { key: 'alt', label: 'Альты' }, { key: 'other', label: 'Другое' }]; },
+    get cryptoGroupFilters() {
+        return [
+            { key: 'popular', label: 'Популярные' },
+            { key: 'other', label: 'Все остальные' },
+        ];
+    },
     toggleCryptoGroup(group) { this.cryptoGroups[group] = !this.cryptoGroups[group]; converterStorage.saveCryptoGroups(this.cryptoGroups); },
     currencyInfo(currency) { return this.catalog.find(({ code }) => code === currency) || { code: currency, name: null }; },
     currencyName(currency) {
@@ -28,7 +32,14 @@ export const currencyListMethods = {
         if (this.pickerTarget === 'add') return 'Добавить валюту';
         return 'Валюта в строке';
     },
-    openPicker(target) { this.pickerTarget = target; this.pickerSearch = ''; this.buzz(); },
+    setPickerMarket(market) { this.pickerMarket = market; this.pickerSearch = ''; this.buzz(); },
+    openPicker(target) {
+        this.pickerTarget = target;
+        this.pickerSearch = '';
+        const row = this.rows.find((item) => item.id === target);
+        this.pickerMarket = target === 'add' ? 'fiat' : (row && this.currencyType(row.currency) === 'crypto' ? 'crypto' : 'fiat');
+        this.buzz();
+    },
     closePicker() { this.pickerTarget = null; this.pickerSwipeOffset = 0; },
     filteredCurrencies(currencies) {
         const query = this.pickerSearch.trim().toLowerCase();

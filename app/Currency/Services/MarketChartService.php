@@ -24,7 +24,7 @@ final class MarketChartService
             });
 
         return $this->cache->remember(
-            "market-chart:v1:{$currency->type->value}:{$currency->code}:{$interval}",
+            "market-chart:v2:{$currency->type->value}:{$currency->code}:{$interval}",
             $ttl,
             fn (): array => $this->loadFromProvider($currency, $interval),
         );

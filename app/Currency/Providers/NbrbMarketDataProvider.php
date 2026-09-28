@@ -60,6 +60,27 @@ final class NbrbMarketDataProvider implements DailyChangeProviderInterface, Mark
         }, $history->json());
         usort($candles, static fn (array $left, array $right): int => $left['time'] <=> $right['time']);
 
+        // The dynamics endpoint can end at the previous publication when the
+        // current official rate was updated separately. Keep every period
+        // aligned to the same latest NBRB observation.
+        if (isset($record['Date'], $record['Cur_OfficialRate'])) {
+            $currentDate = (new DateTimeImmutable((string) $record['Date'], new DateTimeZone('Europe/Minsk')))->setTime(12, 0);
+            $currentRate = BigDecimal::of((string) $record['Cur_OfficialRate'])
+                ->dividedBy($scale, 12, RoundingMode::HalfUp)->__toString();
+            $currentCandle = [
+                'time' => $currentDate->getTimestamp(),
+                'open' => $currentRate,
+                'high' => $currentRate,
+                'low' => $currentRate,
+                'close' => $currentRate,
+            ];
+            if ($candles === [] || $candles[array_key_last($candles)]['time'] < $currentCandle['time']) {
+                $candles[] = $currentCandle;
+            } elseif ($candles[array_key_last($candles)]['time'] === $currentCandle['time']) {
+                $candles[array_key_last($candles)] = $currentCandle;
+            }
+        }
+
         return ['candles' => $candles, 'source' => 'NBRB'];
     }
 

@@ -21,7 +21,7 @@ export const converterStorage = {
         }));
     },
     loadCryptoGroups() {
-        return { stable: true, meme: true, alt: true, other: true, ...read(CRYPTO_GROUPS_KEY, {}) };
+        return { fiat: true, popular: true, other: true, stable: true, meme: true, alt: true, ...read(CRYPTO_GROUPS_KEY, {}) };
     },
     saveCryptoGroups(groups) {
         localStorage.setItem(CRYPTO_GROUPS_KEY, JSON.stringify(groups));

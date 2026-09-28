@@ -6,6 +6,7 @@ export function uiSlice() {
         isFreshInput: true,
         keyboardVisible: true,
         pickerTarget: null,
+        pickerMarket: 'fiat',
         pickerSearch: '',
         pickerSwipeStartY: null,
         pickerSwipeOffset: 0,
