@@ -17,6 +17,7 @@ class ConverterPageTest extends TestCase
             ->assertSee('Нажмите на значок валюты, чтобы заменить её.')
             ->assertSee('Понятно')
             ->assertSee('Показать калькулятор')
+            ->assertDontSee('dailyChangeLabel')
             ->assertSee('<span>Скрыть калькулятор</span>', false)
             ->assertSee('Настройки провайдеров')
             ->assertSee('Добавить валюту');

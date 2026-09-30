@@ -32,7 +32,6 @@ export const conversionMethods = {
         try {
             const data = await currencyApi.conversions({ from: this.base, fromType: this.currencyType(this.base), targets, refresh });
             if (token !== this.requestToken) return;
-            this.changes = { ...this.changes, ...(data.changes || {}) };
             const sources = [];
             let lastUpdatedAt = null;
             this.rows.forEach((row) => {
@@ -68,15 +67,6 @@ export const conversionMethods = {
                 this.loading = false;
             }
         }
-    },
-    dailyChangeLabel(currency) {
-        const change = this.changes[currency];
-        if (change === null || change === undefined) return '—';
-        const digits = Math.abs(change) < 0.1 ? 3 : 2;
-        return `${change >= 0 ? '+' : ''}${change.toFixed(digits)}%`;
-    },
-    dailyChangeClass(currency) {
-        return this.changes[currency] >= 0 ? 'text-emerald-400' : 'text-pink-300';
     },
     async loadRow(row, refresh = false, token = this.requestToken) {
         if (row.currency === this.base) {

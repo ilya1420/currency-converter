@@ -70,7 +70,7 @@
                             <img x-show="meta[row.currency].icon || meta[row.currency].flag" x-cloak :src="meta[row.currency].icon || meta[row.currency].flag" class="h-12 w-12" :class="currencyType(row.currency) === 'crypto' ? 'object-contain' : 'currency-flag-image'" :alt="meta[row.currency].label">
                             <span x-show="!meta[row.currency].icon && !meta[row.currency].flag" class="max-w-9 truncate text-center font-black text-white" :class="badgeTextClass(row.currency)" x-text="badgeText(row.currency)"></span>
                         </button>
-                        <div class="w-20 shrink-0"><p class="truncate text-left text-base font-semibold" x-text="meta[row.currency].label"></p><p class="truncate text-[10px] text-zinc-500" x-text="currencyName(row.currency)"></p><p class="text-[10px] font-semibold" :class="dailyChangeClass(row.currency)" x-text="dailyChangeLabel(row.currency)"></p></div>
+                        <div class="w-20 shrink-0"><p class="truncate text-left text-base font-semibold" x-text="meta[row.currency].label"></p><p class="truncate text-[10px] text-zinc-500" x-text="currencyName(row.currency)"></p></div>
                         <button
                             class="min-w-0 flex-1 whitespace-nowrap text-right font-amount text-2xl font-medium tracking-tight tabular-nums outline-none transition active:scale-[0.98] active:text-fuchsia-200"
                             @click.stop="activateRow(row)" :disabled="Boolean(row.error)"
