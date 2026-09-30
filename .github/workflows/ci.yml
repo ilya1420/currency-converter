@@ -30,9 +30,6 @@ jobs:
       - name: Check PHP formatting
         run: vendor/bin/pint --test
 
-      - name: Run PHP tests
-        run: composer test
-
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -42,8 +39,11 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Run frontend tests
-        run: npm run test:frontend
-
       - name: Build frontend assets
         run: npm run build
+
+      - name: Run PHP tests
+        run: composer test
+
+      - name: Run frontend tests
+        run: npm run test:frontend
