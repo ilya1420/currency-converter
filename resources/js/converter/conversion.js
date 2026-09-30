@@ -27,25 +27,34 @@ export const conversionMethods = {
     },
     async loadAllRequest(refresh, targets) {
         const token = ++this.requestToken;
-        this.loading = true; this.sources = []; this.message = '';
+        this.loading = true; this.message = '';
         this.rows.forEach((row) => { row.loading = true; row.error = ''; });
         try {
             const data = await currencyApi.conversions({ from: this.base, fromType: this.currencyType(this.base), targets, refresh });
             if (token !== this.requestToken) return;
             this.changes = { ...this.changes, ...(data.changes || {}) };
+            const sources = [];
+            let lastUpdatedAt = null;
             this.rows.forEach((row) => {
                 if (row.currency === this.base) {
                     row.result = this.amount;
                     return;
                 }
                 const conversion = data.conversions[row.currency];
-                if (conversion?.error) { row.error = conversion.error; return; }
+                if (conversion?.error) {
+                    row.error = conversion.error;
+                    row.result = '';
+                    delete this.factors[row.currency];
+                    return;
+                }
                 this.factors[row.currency] = conversion.factor;
                 row.result = multiply(this.amount, conversion.factor);
-                this.sources = [...new Set([...this.sources, ...conversion.sources])];
-                this.lastUpdatedAt = conversion.updatedAt;
+                sources.push(...conversion.sources);
+                lastUpdatedAt = conversion.updatedAt;
                 if (conversion.isStale) this.message = 'Нет сети. Используются сохранённые курсы.';
             });
+            this.sources = [...new Set(sources)];
+            this.lastUpdatedAt = lastUpdatedAt;
         } catch {
             if (token === this.requestToken) {
                 this.message = 'Не удалось обновить курс. Показаны последние значения.';
