@@ -10,8 +10,9 @@ function calculatorState({ amount = '100', digits = 2 } = {}) {
         isFreshInput: true,
         rows: [{ currency: 'USD', result: amount }],
         base: 'USD',
-        buzz() {},
-        save() {},
+        keyboardVisible: false,
+        buzz() { this.buzzCalls = (this.buzzCalls || 0) + 1; },
+        save() { this.saveCalls = (this.saveCalls || 0) + 1; },
         formatAmount(value) { return value; },
         inputFractionDigits() { return digits; },
         recalculate(value) { this.lastCalculated = value; },
@@ -20,6 +21,27 @@ function calculatorState({ amount = '100', digits = 2 } = {}) {
 
     return state;
 }
+
+test('showKeyboard opens the keypad and persists the visible state', () => {
+    const state = calculatorState();
+
+    state.showKeyboard();
+
+    assert.equal(state.keyboardVisible, true);
+    assert.equal(state.saveCalls, 1);
+    assert.equal(state.buzzCalls, 1);
+});
+
+test('showKeyboard does not toggle an already visible keypad', () => {
+    const state = calculatorState();
+    state.keyboardVisible = true;
+
+    state.showKeyboard();
+
+    assert.equal(state.keyboardVisible, true);
+    assert.equal(state.saveCalls, undefined);
+    assert.equal(state.buzzCalls, undefined);
+});
 
 test('first digit replaces a selected converted value with extra precision', () => {
     const state = calculatorState({ amount: '251.624361234' });

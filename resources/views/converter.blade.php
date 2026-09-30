@@ -80,6 +80,20 @@
                     @click="openPicker('add')"><span class="text-xl leading-none">+</span> Добавить валюту
                 </button>
             </div>
+            <button
+                x-show="!keyboardVisible"
+                x-cloak
+                class="flex w-full shrink-0 items-center justify-center gap-2 border-t border-white/5 py-3 text-sm font-semibold text-fuchsia-300 active:text-pink-300"
+                @click="showKeyboard"
+                aria-controls="converter-calculator-keypad"
+                aria-expanded="false"
+            >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/>
+                    <path d="M7 8h2m3 0h2m3 0h.01M7 12h2m3 0h2m3 0h.01M8 16h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+                Показать калькулятор
+            </button>
         </div>
     </section>
 
@@ -132,12 +146,13 @@
             x-transition:leave-end="translate-y-4 opacity-0"
             class="pb-2"
         >
-            <button class="flex h-7 w-full items-center justify-center text-zinc-500 transition active:text-fuchsia-300" @click="toggleKeyboard" aria-label="Скрыть клавиатуру">
+            <button class="flex h-8 w-full items-center justify-center gap-1 text-xs font-medium text-zinc-500 transition active:text-fuchsia-300" @click="toggleKeyboard" aria-controls="converter-calculator-keypad" aria-expanded="true" aria-label="Скрыть калькулятор">
                 <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
+                <span>Скрыть калькулятор</span>
             </button>
-            <div class="grid grid-cols-4 gap-2">
+            <div id="converter-calculator-keypad" class="grid grid-cols-4 gap-2">
                 <template x-for="key in keys" :key="key">
                     <button
                         class="grid h-12 place-items-center rounded-xl text-lg font-semibold transition active:scale-95"
@@ -157,26 +172,10 @@
                 </button>
             </div>
         </div>
-        <button
-                x-show="!keyboardVisible"
-                x-cloak
-                x-transition:enter="transition ease-out duration-200"
-                x-transition:enter-start="translate-y-2 opacity-0"
-                x-transition:enter-end="translate-y-0 opacity-100"
-                x-transition:leave="transition ease-in duration-150"
-                x-transition:leave-start="translate-y-0 opacity-100"
-                x-transition:leave-end="translate-y-2 opacity-0"
-                class="absolute bottom-0 left-1/2 grid h-10 w-10 -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border border-white/10 bg-[#18181B] text-zinc-400 shadow-lg shadow-black/40 transition active:scale-[0.95] active:text-fuchsia-200"
-                @click="toggleKeyboard" aria-label="Показать клавиатуру">
-            <svg class="h-4 w-4 text-fuchsia-300" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="4" y="3" width="16" height="18" rx="3" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M8 8h8M8 12h2m4 0h2m-8 4h2m4 0h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-        </button>
     </section>
 
     <nav class="flex shrink-0 items-center justify-around border-t border-white/5 bg-[#111114] px-12 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-1.5" aria-label="Основная навигация">
-        <button class="flex min-h-11 min-w-14 flex-col items-center justify-center gap-1 text-[10px] font-medium leading-none" @click="activeTab === 'converter' ? toggleKeyboard() : setTab('converter')" :class="activeTab === 'converter' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Конвертер">
+        <button class="flex min-h-11 min-w-14 flex-col items-center justify-center gap-1 text-[10px] font-medium leading-none" @click="setTab('converter')" :class="activeTab === 'converter' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Конвертер">
             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6h10m0 0-3-3m3 3-3 3M16 14H6m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>Конвертер</span>
         </button>
