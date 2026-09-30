@@ -2,9 +2,9 @@
 
 namespace App\Currency\Services;
 
-use App\Currency\Exceptions\ProviderException;
 use App\Currency\Contracts\DailyChangeProviderInterface;
 use App\Currency\Enums\Currency;
+use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 
 final class DailyChangeService
@@ -27,12 +27,14 @@ final class DailyChangeService
                 $currency = $this->catalog->resolve($code);
                 if ($currency->code === 'BYN') {
                     $changes[$code] = null;
+
                     continue;
                 }
 
                 $key = $this->cacheKey($currency);
                 if (($cached = $this->cache->get($key)) !== null) {
                     $changes[$code] = $cached;
+
                     continue;
                 }
 

@@ -8,8 +8,8 @@ use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ConversionService;
 use App\Currency\Services\CurrencyCatalog;
-use App\Http\Requests\ConvertCurrencyRequest;
 use App\Http\Presenters\ConversionPresenter;
+use App\Http\Requests\ConvertCurrencyRequest;
 use Illuminate\Http\JsonResponse;
 
 final class ConversionController

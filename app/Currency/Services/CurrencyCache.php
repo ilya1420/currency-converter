@@ -4,8 +4,8 @@ namespace App\Currency\Services;
 
 use Closure;
 use DateTimeInterface;
-use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 
 final class CurrencyCache

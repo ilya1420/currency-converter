@@ -4,11 +4,11 @@ use App\Currency\Providers\CoinGeckoCurrencyCatalogProvider;
 use App\Currency\Providers\CoinGeckoDailyChangeProvider;
 use App\Currency\Providers\CoinGeckoRateProvider;
 use App\Currency\Providers\KrakenCurrencyCatalogProvider;
+use App\Currency\Providers\KrakenMarketDataProvider;
 use App\Currency\Providers\KrakenRateProvider;
 use App\Currency\Providers\NbrbCurrencyCatalogProvider;
-use App\Currency\Providers\NbrbRateProvider;
-use App\Currency\Providers\KrakenMarketDataProvider;
 use App\Currency\Providers\NbrbMarketDataProvider;
+use App\Currency\Providers\NbrbRateProvider;
 
 return [
     'cache' => [

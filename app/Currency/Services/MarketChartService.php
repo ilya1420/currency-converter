@@ -35,14 +35,18 @@ final class MarketChartService
     {
         $lastFailure = null;
         foreach ($this->providers as $provider) {
-            if (! $provider->supports($currency)) continue;
+            if (! $provider->supports($currency)) {
+                continue;
+            }
             try {
                 return $provider->chart($currency, $interval) + ['source' => $provider->source()];
             } catch (ProviderException $exception) {
                 $lastFailure = $exception;
             }
         }
-        if ($lastFailure) throw $lastFailure;
+        if ($lastFailure) {
+            throw $lastFailure;
+        }
         throw new UnsupportedCurrencyPairException('No market data provider supports this asset.');
     }
 }

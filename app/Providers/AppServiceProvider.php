@@ -4,8 +4,9 @@ namespace App\Providers;
 
 use App\Currency\Providers\KrakenAssetMapper;
 use App\Currency\Repositories\ExchangeRateRepository;
-use App\Currency\Services\CurrencyCatalog;
 use App\Currency\Services\CurrencyCache;
+use App\Currency\Services\CurrencyCatalog;
+use App\Currency\Services\DailyChangeService;
 use App\Currency\Services\ExternalApiClientFactory;
 use App\Currency\Services\MarketChartService;
 use App\Currency\Services\RateService;
@@ -41,7 +42,7 @@ class AppServiceProvider extends ServiceProvider
             $this->app->make(ExchangeRateRepository::class),
             $this->app->tagged('currency.rate-providers'),
         ));
-        $this->app->scoped(\App\Currency\Services\DailyChangeService::class, fn (): \App\Currency\Services\DailyChangeService => new \App\Currency\Services\DailyChangeService(
+        $this->app->scoped(DailyChangeService::class, fn (): DailyChangeService => new DailyChangeService(
             $this->app->make(CurrencyCatalog::class),
             $this->app->make(CurrencyCache::class),
             $this->app->tagged('currency.daily-change-providers'),
@@ -51,5 +52,4 @@ class AppServiceProvider extends ServiceProvider
             $this->app->make(CurrencyCache::class),
         ));
     }
-
 }

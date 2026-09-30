@@ -39,6 +39,7 @@ final class CurrencyCatalog
                     continue;
                 }
             }
+
             return array_values($currencies);
         });
     }

@@ -2,8 +2,8 @@
 
 namespace App\Currency\Providers;
 
-use App\Currency\Contracts\MarketDataProviderInterface;
 use App\Currency\Contracts\DailyChangeProviderInterface;
+use App\Currency\Contracts\MarketDataProviderInterface;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Exceptions\ProviderException;
