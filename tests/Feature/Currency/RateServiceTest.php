@@ -59,16 +59,32 @@ class RateServiceTest extends TestCase
         $repository = new ExchangeRateRepository;
         $repository->save($this->rate('3.12', (new DateTimeImmutable)->modify('-7 hours')));
         $provider = $this->provider(exception: new ProviderException('offline'));
+        $nextProvider = $this->provider('3.20');
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $rate = (new RateService($repository, [$provider, $nextProvider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertTrue($rate->isStale);
+        $this->assertSame(0, $nextProvider->calls);
     }
 
     public function test_provider_failure_without_cache_throws(): void
     {
         $this->expectException(RateUnavailableException::class);
         (new RateService(new ExchangeRateRepository, [$this->provider(exception: new ProviderException('offline'))]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+    }
+
+    public function test_provider_failure_without_stale_cache_does_not_call_another_provider(): void
+    {
+        $failedProvider = $this->provider(exception: new ProviderException('offline'));
+        $nextProvider = $this->provider('3.20');
+
+        try {
+            (new RateService(new ExchangeRateRepository, [$failedProvider, $nextProvider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+            $this->fail('A provider failure without cached data must make the rate unavailable.');
+        } catch (RateUnavailableException) {
+            $this->assertSame(1, $failedProvider->calls);
+            $this->assertSame(0, $nextProvider->calls);
+        }
     }
 
     private function rate(string $value, DateTimeImmutable $fetchedAt): ExchangeRate

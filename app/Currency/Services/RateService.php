@@ -27,7 +27,6 @@ final class RateService
             return $this->resolvedRates[$key];
         }
 
-        $staleRates = [];
         foreach ($this->providers as $provider) {
             if (! $provider->supports($from, $to)) {
                 continue;
@@ -42,14 +41,11 @@ final class RateService
             } catch (ProviderException $exception) {
                 $cached = $this->rates->findLatest($source, $from, $to);
                 if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
-                    $staleRates[] = $cached;
+                    return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
                 }
-            }
-        }
-        if ($staleRates !== []) {
-            $cached = $staleRates[0];
 
-            return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
+                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", previous: $exception);
+            }
         }
         throw new RateUnavailableException("No rate is available for {$from->code}/{$to->code}.");
     }
