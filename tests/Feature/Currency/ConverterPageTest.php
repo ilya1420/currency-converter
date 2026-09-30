@@ -11,6 +11,7 @@ class ConverterPageTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertSee('Конвертер')
+            ->assertSee('Настройки провайдеров')
             ->assertSee('Добавить валюту');
     }
 }
