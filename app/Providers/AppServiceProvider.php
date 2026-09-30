@@ -50,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(RateService::class, fn (): RateService => new RateService(
             $this->app->make(ExchangeRateRepository::class),
             $this->app->tagged('currency.rate-providers'),
+            $this->app->make(ProviderSelectionService::class),
         ));
         $this->app->scoped(DailyChangeService::class, fn (): DailyChangeService => new DailyChangeService(
             $this->app->make(CurrencyCatalog::class),

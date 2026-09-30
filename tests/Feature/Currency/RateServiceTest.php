@@ -5,13 +5,17 @@ namespace Tests\Feature\Currency;
 use App\Currency\Contracts\RateProviderInterface;
 use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
+use App\Currency\Enums\CurrencyType;
+use App\Currency\Enums\ProviderCapability;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Repositories\ExchangeRateRepository;
+use App\Currency\Services\ProviderSelectionService;
 use App\Currency\Services\RateService;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class RateServiceTest extends TestCase
@@ -24,7 +28,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', new DateTimeImmutable));
         $provider = $this->provider();
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $rate = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertSame(0, $provider->calls);
         $this->assertFalse($rate->isStale);
@@ -36,7 +40,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', (new DateTimeImmutable)->modify('-7 hours')));
         $provider = $this->provider('3.15');
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $rate = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertSame(1, $provider->calls);
         $this->assertSame('3.15', $rate->rate);
@@ -48,7 +52,7 @@ class RateServiceTest extends TestCase
         $repository->save($this->rate('3.12', new DateTimeImmutable));
         $provider = $this->provider('3.15');
 
-        $rate = (new RateService($repository, [$provider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
+        $rate = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
 
         $this->assertSame(1, $provider->calls);
         $this->assertSame('3.15', $rate->rate);
@@ -61,7 +65,7 @@ class RateServiceTest extends TestCase
         $provider = $this->provider(exception: new ProviderException('offline'));
         $nextProvider = $this->provider('3.20');
 
-        $rate = (new RateService($repository, [$provider, $nextProvider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $rate = $this->service($repository, [$provider, $nextProvider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
 
         $this->assertTrue($rate->isStale);
         $this->assertSame(0, $nextProvider->calls);
@@ -70,7 +74,7 @@ class RateServiceTest extends TestCase
     public function test_provider_failure_without_cache_throws(): void
     {
         $this->expectException(RateUnavailableException::class);
-        (new RateService(new ExchangeRateRepository, [$this->provider(exception: new ProviderException('offline'))]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $this->service(new ExchangeRateRepository, [$this->provider(exception: new ProviderException('offline'))])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
     }
 
     public function test_provider_failure_without_stale_cache_does_not_call_another_provider(): void
@@ -79,12 +83,63 @@ class RateServiceTest extends TestCase
         $nextProvider = $this->provider('3.20');
 
         try {
-            (new RateService(new ExchangeRateRepository, [$failedProvider, $nextProvider]))->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+            $this->service(new ExchangeRateRepository, [$failedProvider, $nextProvider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
             $this->fail('A provider failure without cached data must make the rate unavailable.');
         } catch (RateUnavailableException) {
             $this->assertSame(1, $failedProvider->calls);
             $this->assertSame(0, $nextProvider->calls);
         }
+    }
+
+    public function test_explicit_crypto_provider_selection_is_used(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.coingecko.com/api/v3/simple/price*' => Http::response(['bitcoin-selection-test' => ['usd' => 68000]], 200)]);
+        app(ProviderSelectionService::class)->select(ProviderCapability::CRYPTO_RATES, 'coingecko');
+
+        $rate = app(RateService::class)->getRate(
+            new Currency('BTC', CurrencyType::CRYPTO, 'XBTUSD', null, 'bitcoin-selection-test'),
+            Currency::fiat('USD'),
+        );
+
+        $this->assertSame(RateSource::COINGECKO, $rate->source);
+        $this->assertSame('68000', $rate->rate);
+        Http::assertSentCount(1);
+    }
+
+    public function test_automatic_crypto_provider_selection_skips_unsupported_pairs(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.coingecko.com/api/v3/simple/price*' => Http::response(['test-coin-auto' => ['usd' => 12.5]], 200)]);
+
+        $rate = app(RateService::class)->getRate(
+            new Currency('TST', CurrencyType::CRYPTO, null, null, 'test-coin-auto'),
+            Currency::fiat('USD'),
+        );
+
+        $this->assertSame(RateSource::COINGECKO, $rate->source);
+        $this->assertSame('12.5', $rate->rate);
+        Http::assertSentCount(1);
+    }
+
+    public function test_selected_provider_failure_does_not_fall_back_to_another_provider(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.kraken.com/0/public/Ticker?pair=XBTUSD' => Http::response([], 503)]);
+        app(ProviderSelectionService::class)->select(ProviderCapability::CRYPTO_RATES, 'kraken');
+
+        try {
+            app(RateService::class)->getRate(Currency::crypto('BTC', 'XBTUSD'), Currency::fiat('USD'));
+            $this->fail('A selected provider failure must not fall back to another provider.');
+        } catch (RateUnavailableException) {
+            Http::assertSentCount(1);
+        }
+    }
+
+    /** @param iterable<RateProviderInterface> $providers */
+    private function service(ExchangeRateRepository $repository, iterable $providers): RateService
+    {
+        return new RateService($repository, $providers, app(ProviderSelectionService::class));
     }
 
     private function rate(string $value, DateTimeImmutable $fetchedAt): ExchangeRate

@@ -17,9 +17,14 @@ final class ProviderSelectionService
 
     public function selected(ProviderCapability $capability): ProviderDefinition
     {
+        return $this->configured($capability) ?? $this->defaultFor($capability);
+    }
+
+    public function configured(ProviderCapability $capability): ?ProviderDefinition
+    {
         $providerId = $this->selections->find($capability);
         if ($providerId === null) {
-            return $this->defaultFor($capability);
+            return null;
         }
 
         $provider = $this->registry->find($providerId);

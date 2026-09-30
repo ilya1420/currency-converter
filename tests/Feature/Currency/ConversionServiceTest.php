@@ -9,6 +9,7 @@ use App\Currency\Enums\RateSource;
 use App\Currency\Repositories\ExchangeRateRepository;
 use App\Currency\Services\ConversionService;
 use App\Currency\Services\DecimalCalculator;
+use App\Currency\Services\ProviderSelectionService;
 use App\Currency\Services\RateService;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -66,6 +67,6 @@ class ConversionServiceTest extends TestCase
             }
         };
 
-        return new ConversionService(new RateService(new ExchangeRateRepository, [$provider]), new DecimalCalculator);
+        return new ConversionService(new RateService(new ExchangeRateRepository, [$provider], app(ProviderSelectionService::class)), new DecimalCalculator);
     }
 }
