@@ -3,6 +3,7 @@ import { converterStorage } from '../storage.js';
 export function uiSlice() {
     return {
         activeTab: 'converter',
+        showFirstRunHint: false,
         providerSettingsOpen: false,
         providerSettings: null,
         providerSettingsLoading: false,

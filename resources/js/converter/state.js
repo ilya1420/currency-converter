@@ -40,6 +40,7 @@ export function createConverterState(catalog) {
         },
         initializeLayout() {
             const saved = converterStorage.loadLayout();
+            this.showFirstRunHint = !converterStorage.hasSeenFirstRunHint();
             if (saved && Array.isArray(saved.rows)) {
                 const savedBase = saved.activeCurrency || saved.base || this.base;
                 const currencies = [...new Set([
@@ -68,6 +69,10 @@ export function createConverterState(catalog) {
             }
             if (!this.rows.some((item) => item.currency === this.base)) this.base = this.rows[0]?.currency || 'USD';
             void this.loadAll();
+        },
+        dismissFirstRunHint() {
+            this.showFirstRunHint = false;
+            converterStorage.markFirstRunHintSeen();
         },
         get sourceLabel() {
             if (!this.sources.length) return '';

@@ -1,5 +1,6 @@
 const LAYOUT_KEY = 'currency-converter-layout';
 const CRYPTO_GROUPS_KEY = 'currency-converter-crypto-groups';
+const FIRST_RUN_HINT_KEY = 'currency-converter-first-run-hint-seen';
 
 function read(key, fallback) {
     try {
@@ -19,6 +20,14 @@ export const converterStorage = {
             keyboardVisible,
             rows: rows.map(({ currency }) => ({ currency })),
         }));
+    },
+    hasSeenFirstRunHint() {
+        return read(FIRST_RUN_HINT_KEY, false) === true;
+    },
+    markFirstRunHintSeen() {
+        try {
+            localStorage.setItem(FIRST_RUN_HINT_KEY, 'true');
+        } catch {}
     },
     loadCryptoGroups() {
         return { fiat: true, popular: true, other: true, stable: true, meme: true, alt: true, ...read(CRYPTO_GROUPS_KEY, {}) };

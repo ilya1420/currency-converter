@@ -29,6 +29,33 @@ test('layout restoration keeps saved currencies even when catalog is incomplete'
     }
 });
 
+test('first-run hint is shown once and dismissal is persisted locally', () => {
+    const values = new Map();
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+    };
+
+    try {
+        const firstState = createConverterState([]);
+        firstState.loadAll = () => Promise.resolve();
+        firstState.initializeLayout();
+
+        assert.equal(firstState.showFirstRunHint, true);
+        firstState.dismissFirstRunHint();
+        assert.equal(values.get('currency-converter-first-run-hint-seen'), 'true');
+
+        const returningState = createConverterState([]);
+        returningState.loadAll = () => Promise.resolve();
+        returningState.initializeLayout();
+
+        assert.equal(returningState.showFirstRunHint, false);
+    } finally {
+        globalThis.localStorage = previousStorage;
+    }
+});
+
 test('source label names built-in providers and removes duplicates', () => {
     const state = createConverterState([]);
     state.sources = ['nbrb', 'kraken', 'nbrb'];
