@@ -17,8 +17,12 @@ class ProviderRegistryTest extends TestCase
         $registry = app(ProviderRegistry::class);
 
         $this->assertSame(
-            ['nbrb', 'kraken', 'coingecko'],
-            array_map(static fn ($provider): string => $provider->id, $registry->forCapability(ProviderCapability::RATES)),
+            ['nbrb'],
+            array_map(static fn ($provider): string => $provider->id, $registry->forCapability(ProviderCapability::FIAT_RATES)),
+        );
+        $this->assertSame(
+            ['kraken', 'coingecko'],
+            array_map(static fn ($provider): string => $provider->id, $registry->forCapability(ProviderCapability::CRYPTO_RATES)),
         );
         $this->assertSame(
             ['coingecko', 'kraken', 'nbrb'],
@@ -35,7 +39,7 @@ class ProviderRegistryTest extends TestCase
         $provider = app(ProviderRegistry::class)->find('nbrb');
 
         $this->assertNotNull($provider);
-        $this->assertSame(NbrbRateProvider::class, $provider->adapterFor(ProviderCapability::RATES));
+        $this->assertSame(NbrbRateProvider::class, $provider->adapterFor(ProviderCapability::FIAT_RATES));
         $this->assertSame(CoinGeckoDailyChangeProvider::class, app(ProviderRegistry::class)
             ->find('coingecko')
             ->adapterFor(ProviderCapability::DAILY_CHANGES));
@@ -44,7 +48,7 @@ class ProviderRegistryTest extends TestCase
             ->adapterFor(ProviderCapability::MARKET_DATA));
         $this->assertSame(NbrbMarketDataProvider::class, $provider->adapterFor(ProviderCapability::MARKET_DATA));
         $this->assertSame(
-            ['catalog', 'rates', 'daily_changes'],
+            ['catalog', 'crypto_rates', 'daily_changes'],
             array_map(static fn (ProviderCapability $capability): string => $capability->value, app(ProviderRegistry::class)
                 ->find('coingecko')
                 ->capabilities()),

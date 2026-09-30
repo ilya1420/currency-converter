@@ -4,12 +4,14 @@ namespace App\Providers;
 
 use App\Currency\Providers\KrakenAssetMapper;
 use App\Currency\Repositories\ExchangeRateRepository;
+use App\Currency\Repositories\ProviderSelectionRepository;
 use App\Currency\Services\CurrencyCache;
 use App\Currency\Services\CurrencyCatalog;
 use App\Currency\Services\DailyChangeService;
 use App\Currency\Services\ExternalApiClientFactory;
 use App\Currency\Services\MarketChartService;
 use App\Currency\Services\ProviderRegistry;
+use App\Currency\Services\ProviderSelectionService;
 use App\Currency\Services\RateService;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,10 +23,12 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(ExchangeRateRepository::class);
+        $this->app->singleton(ProviderSelectionRepository::class);
         $this->app->singleton(ProviderRegistry::class, fn (): ProviderRegistry => new ProviderRegistry(
             config('currency.providers.registry', []),
             config('currency.providers.priority', []),
         ));
+        $this->app->singleton(ProviderSelectionService::class);
         $this->app->scoped(CurrencyCache::class);
         $this->app->singleton(ExternalApiClientFactory::class);
         $this->app->singleton(KrakenAssetMapper::class);

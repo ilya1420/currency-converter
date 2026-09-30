@@ -1,5 +1,6 @@
 <?php
 
+use App\Currency\Enums\ProviderCapability;
 use App\Currency\Providers\CoinGeckoCurrencyCatalogProvider;
 use App\Currency\Providers\CoinGeckoDailyChangeProvider;
 use App\Currency\Providers\CoinGeckoRateProvider;
@@ -15,7 +16,7 @@ $providerDefinitions = [
         'name' => 'НБРБ',
         'adapters' => [
             'catalog' => NbrbCurrencyCatalogProvider::class,
-            'rates' => NbrbRateProvider::class,
+            'fiat_rates' => NbrbRateProvider::class,
             'daily_changes' => NbrbMarketDataProvider::class,
             'market' => NbrbMarketDataProvider::class,
         ],
@@ -24,7 +25,7 @@ $providerDefinitions = [
         'name' => 'Kraken',
         'adapters' => [
             'catalog' => KrakenCurrencyCatalogProvider::class,
-            'rates' => KrakenRateProvider::class,
+            'crypto_rates' => KrakenRateProvider::class,
             'daily_changes' => KrakenMarketDataProvider::class,
             'market' => KrakenMarketDataProvider::class,
         ],
@@ -33,7 +34,7 @@ $providerDefinitions = [
         'name' => 'CoinGecko',
         'adapters' => [
             'catalog' => CoinGeckoCurrencyCatalogProvider::class,
-            'rates' => CoinGeckoRateProvider::class,
+            'crypto_rates' => CoinGeckoRateProvider::class,
             'daily_changes' => CoinGeckoDailyChangeProvider::class,
         ],
     ],
@@ -41,18 +42,30 @@ $providerDefinitions = [
 
 $providerOrder = [
     'catalog' => ['nbrb', 'kraken', 'coingecko'],
-    'rates' => ['nbrb', 'kraken', 'coingecko'],
+    'fiat_rates' => ['nbrb'],
+    'crypto_rates' => ['kraken', 'coingecko'],
     'daily_changes' => ['coingecko', 'kraken', 'nbrb'],
     'market' => ['kraken', 'nbrb'],
 ];
+$rateProviderOrder = ['nbrb', 'kraken', 'coingecko'];
 
 $providers = ['registry' => $providerDefinitions, 'priority' => $providerOrder];
-foreach ($providerOrder as $capability => $providerIds) {
+foreach (['catalog', 'daily_changes', 'market'] as $capability) {
+    $providerIds = $providerOrder[$capability];
     $providers[$capability] = array_map(
         static fn (string $providerId): string => $providerDefinitions[$providerId]['adapters'][$capability],
         $providerIds,
     );
 }
+$providers['rates'] = [];
+foreach ($rateProviderOrder as $providerId) {
+    foreach ([ProviderCapability::FIAT_RATES->value, ProviderCapability::CRYPTO_RATES->value] as $capability) {
+        if (isset($providerDefinitions[$providerId]['adapters'][$capability])) {
+            $providers['rates'][] = $providerDefinitions[$providerId]['adapters'][$capability];
+        }
+    }
+}
+$providers['rates'] = array_values(array_unique($providers['rates']));
 
 return [
     'cache' => [
