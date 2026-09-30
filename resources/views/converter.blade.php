@@ -13,6 +13,11 @@
         <p x-show="lastUpdatedLabel" x-cloak class="shrink-0 text-[11px] font-medium text-zinc-500" x-text="lastUpdatedLabel"></p>
     </header>
 
+    <aside x-show="showFirstRunHint" x-cloak class="mx-4 mt-2 flex shrink-0 items-start gap-3 rounded-xl border border-fuchsia-500/15 bg-fuchsia-500/5 px-3 py-2.5" role="note" aria-label="Подсказка для начала">
+        <p class="min-w-0 flex-1 text-xs leading-relaxed text-zinc-300">Нажмите на значок валюты, чтобы заменить её. «Добавить валюту» добавит ещё одну строку.</p>
+        <button class="shrink-0 py-0.5 text-xs font-semibold text-fuchsia-300 active:text-pink-300" @click="dismissFirstRunHint" aria-label="Закрыть подсказку">Понятно</button>
+    </aside>
+
     <p x-show="activeTab === 'converter' && message" x-cloak class="mx-5 mb-3 shrink-0 text-xs text-pink-300" aria-live="polite"
        x-text="message"></p>
 
