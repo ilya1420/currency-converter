@@ -40,6 +40,20 @@ class ConversionEndpointTest extends TestCase
             ->assertJsonPath('sources.0', 'nbrb');
     }
 
+    public function test_batch_conversion_returns_stale_rate_and_error_for_unavailable_pair(): void
+    {
+        (new ExchangeRateRepository)->save(new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), '3.12', RateSource::NBRB, (new DateTimeImmutable)->modify('-7 hours')));
+        Http::preventStrayRequests();
+        Http::fake(static fn () => Http::response([], 503));
+
+        $this->postJson('/conversions', ['from' => 'USD', 'targets' => ['BYN', 'EUR']])
+            ->assertOk()
+            ->assertJsonPath('conversions.BYN.factor', '3.120000000000000000')
+            ->assertJsonPath('conversions.BYN.sources.0', 'nbrb')
+            ->assertJsonPath('conversions.BYN.isStale', true)
+            ->assertJsonPath('conversions.EUR.error', 'Нет курса');
+    }
+
     public function test_it_converts_usd_to_byn(): void
     {
         Http::fake([

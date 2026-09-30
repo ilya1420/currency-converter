@@ -42,11 +42,11 @@ test('concurrent conversion loads are coalesced into one request', async () => {
     }
 });
 
-test('partial conversion failure clears only the failed row and keeps successful provider metadata', async () => {
+test('partial failure marks the unavailable row while preserving stale rates and metadata', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
         conversions: {
-            EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: false },
+            EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: true },
             BYN: { error: 'Нет курса' },
         },
         changes: {},
@@ -66,6 +66,7 @@ test('partial conversion failure clears only the failed row and keeps successful
         assert.equal(state.factors.BYN, undefined);
         assert.deepEqual(state.sources, ['nbrb']);
         assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
+        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы.');
     } finally {
         globalThis.fetch = originalFetch;
     }
