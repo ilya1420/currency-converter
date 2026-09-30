@@ -23,6 +23,6 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="CURRENCY_CACHE_STORE" value="array"/>
-        <env name="LOG_CHANNEL" value="null"/>
+        <env name="LOG_CHANNEL" value="stderr"/>
     </php>
 </phpunit>
