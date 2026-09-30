@@ -25,11 +25,6 @@ final class KrakenRateProvider implements RateProviderInterface
         return RateSource::KRAKEN;
     }
 
-    public function source(): RateSource
-    {
-        return RateSource::KRAKEN;
-    }
-
     public function supports(Currency $from, Currency $to): bool
     {
         if ($from->type !== CurrencyType::CRYPTO || $to->type !== CurrencyType::FIAT || $to->code !== 'USD') {

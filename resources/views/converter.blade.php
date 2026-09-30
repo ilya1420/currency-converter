@@ -8,7 +8,7 @@
 </head>
 <body class="h-[100dvh] overflow-hidden bg-[#09090B] font-sans text-[#F8FAFC] antialiased">
 <main class="mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden" x-data="converter([])">
-    <header class="flex h-8 shrink-0 items-center border-b border-white/5 px-5 pt-[env(safe-area-inset-top)]">
+    <header class="z-20 flex min-h-10 h-auto shrink-0 items-end border-b border-white/5 bg-[#09090B] px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <p x-show="lastUpdatedLabel" x-cloak class="text-[11px] font-medium text-zinc-500" x-text="lastUpdatedLabel"></p>
     </header>
 
