@@ -10,7 +10,7 @@ function conversionState() {
             { currency: 'USD', result: '100', error: '', loading: false },
             { currency: 'EUR', result: '', error: '', loading: false },
         ],
-        factors: {}, changes: {}, sources: [], lastUpdatedAt: null, message: '', loading: false,
+        factors: {}, sources: [], lastUpdatedAt: null, message: '', loading: false,
         requestToken: 0, loadAllPromise: null, loadAllKey: null,
         currencyType(currency) { return currency === 'BTC' ? 'crypto' : 'fiat'; },
         save() {}, showKeyboard() {}, buzz() {},
@@ -36,7 +36,6 @@ test('concurrent conversion loads are coalesced into one request', async () => {
         await Promise.all([state.loadAll(), state.loadAll()]);
         assert.equal(requests, 1);
         assert.equal(state.rows[1].result, '92');
-        assert.equal(state.changes.EUR, -0.3);
     } finally {
         globalThis.fetch = originalFetch;
     }

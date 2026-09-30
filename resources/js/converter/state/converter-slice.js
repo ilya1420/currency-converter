@@ -10,7 +10,6 @@ export function converterSlice(catalog) {
         rows: ['USD', 'EUR', 'BYN', 'RUB'].map((currency, index) => row(index + 1, currency)),
         nextId: 5,
         factors: {},
-        changes: {},
         sources: [],
         message: '',
         lastUpdatedAt: null,
