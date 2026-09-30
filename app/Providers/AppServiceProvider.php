@@ -46,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(CurrencyCatalog::class, fn (): CurrencyCatalog => new CurrencyCatalog(
             $this->app->tagged('currency.catalog-providers'),
             $this->app->make(CurrencyCache::class),
+            $this->app->make(ProviderSelectionService::class),
         ));
         $this->app->scoped(RateService::class, fn (): RateService => new RateService(
             $this->app->make(ExchangeRateRepository::class),
@@ -56,10 +57,12 @@ class AppServiceProvider extends ServiceProvider
             $this->app->make(CurrencyCatalog::class),
             $this->app->make(CurrencyCache::class),
             $this->app->tagged('currency.daily-change-providers'),
+            $this->app->make(ProviderSelectionService::class),
         ));
         $this->app->scoped(MarketChartService::class, fn (): MarketChartService => new MarketChartService(
             $this->app->tagged('currency.market-data-providers'),
             $this->app->make(CurrencyCache::class),
+            $this->app->make(ProviderSelectionService::class),
         ));
     }
 }

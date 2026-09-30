@@ -17,8 +17,8 @@ $providerDefinitions = [
         'adapters' => [
             'catalog' => NbrbCurrencyCatalogProvider::class,
             'fiat_rates' => NbrbRateProvider::class,
-            'daily_changes' => NbrbMarketDataProvider::class,
-            'market' => NbrbMarketDataProvider::class,
+            'fiat_daily_changes' => NbrbMarketDataProvider::class,
+            'fiat_market_data' => NbrbMarketDataProvider::class,
         ],
     ],
     'kraken' => [
@@ -26,8 +26,8 @@ $providerDefinitions = [
         'adapters' => [
             'catalog' => KrakenCurrencyCatalogProvider::class,
             'crypto_rates' => KrakenRateProvider::class,
-            'daily_changes' => KrakenMarketDataProvider::class,
-            'market' => KrakenMarketDataProvider::class,
+            'crypto_daily_changes' => KrakenMarketDataProvider::class,
+            'crypto_market_data' => KrakenMarketDataProvider::class,
         ],
     ],
     'coingecko' => [
@@ -35,7 +35,7 @@ $providerDefinitions = [
         'adapters' => [
             'catalog' => CoinGeckoCurrencyCatalogProvider::class,
             'crypto_rates' => CoinGeckoRateProvider::class,
-            'daily_changes' => CoinGeckoDailyChangeProvider::class,
+            'crypto_daily_changes' => CoinGeckoDailyChangeProvider::class,
         ],
     ],
 ];
@@ -44,18 +44,28 @@ $providerOrder = [
     'catalog' => ['nbrb', 'kraken', 'coingecko'],
     'fiat_rates' => ['nbrb'],
     'crypto_rates' => ['kraken', 'coingecko'],
-    'daily_changes' => ['coingecko', 'kraken', 'nbrb'],
-    'market' => ['kraken', 'nbrb'],
+    'fiat_daily_changes' => ['nbrb'],
+    'crypto_daily_changes' => ['coingecko', 'kraken'],
+    'fiat_market_data' => ['nbrb'],
+    'crypto_market_data' => ['kraken'],
 ];
 $rateProviderOrder = ['nbrb', 'kraken', 'coingecko'];
 
 $providers = ['registry' => $providerDefinitions, 'priority' => $providerOrder];
-foreach (['catalog', 'daily_changes', 'market'] as $capability) {
-    $providerIds = $providerOrder[$capability];
-    $providers[$capability] = array_map(
-        static fn (string $providerId): string => $providerDefinitions[$providerId]['adapters'][$capability],
-        $providerIds,
-    );
+foreach ([
+    'catalog' => ['catalog'],
+    'daily_changes' => ['fiat_daily_changes', 'crypto_daily_changes'],
+    'market' => ['fiat_market_data', 'crypto_market_data'],
+] as $runtimeCapability => $capabilities) {
+    $providers[$runtimeCapability] = [];
+    foreach ($capabilities as $capability) {
+        foreach ($providerOrder[$capability] as $providerId) {
+            if (isset($providerDefinitions[$providerId]['adapters'][$capability])) {
+                $providers[$runtimeCapability][] = $providerDefinitions[$providerId]['adapters'][$capability];
+            }
+        }
+    }
+    $providers[$runtimeCapability] = array_values(array_unique($providers[$runtimeCapability]));
 }
 $providers['rates'] = [];
 foreach ($rateProviderOrder as $providerId) {

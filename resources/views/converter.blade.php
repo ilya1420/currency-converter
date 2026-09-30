@@ -241,19 +241,20 @@
                 <h2 id="provider-settings-title" class="text-lg font-bold">Источники курсов</h2>
                 <button class="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-zinc-400" @click="providerSettingsOpen = false" aria-label="Закрыть настройки">×</button>
             </div>
-            <p class="mb-5 text-xs leading-relaxed text-zinc-500">Выберите встроенного провайдера отдельно для каждого типа курсов. При ошибке выбранного источника автоматического переключения не будет.</p>
+            <p class="mb-5 text-xs leading-relaxed text-zinc-500">Выберите встроенный источник для каждой capability. Для фиата и криптовалют выбор разделён там, где провайдеры отличаются. При ошибке выбранного источника автоматического переключения не будет.</p>
             <p x-show="providerSettingsLoading" class="py-5 text-center text-sm text-zinc-500">Загрузка настроек…</p>
             <p x-show="providerSettingsError" x-cloak class="mb-3 text-sm text-pink-300" role="alert" x-text="providerSettingsError"></p>
             <template x-for="capability in providerCapabilities" :key="capability.id">
                 <div x-show="providerSettings?.capabilities?.[capability.id]" class="mb-3 rounded-2xl bg-[#27272A] p-4">
                     <label class="mb-2 block text-xs font-semibold text-zinc-300" :for="`provider-${capability.id}`" x-text="capability.label"></label>
                     <div class="flex items-center gap-2">
-                        <select class="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#18181B] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-400 disabled:opacity-50" :id="`provider-${capability.id}`" :value="providerSettings?.capabilities?.[capability.id]?.selected" @change="saveProviderSelection(capability.id, $event.target.value)" :disabled="providerSettingsSaving">
+                        <select class="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#18181B] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-400 disabled:opacity-50" :id="`provider-${capability.id}`" :value="providerSettings?.capabilities?.[capability.id]?.selected || '__automatic__'" @change="changeProviderSelection(capability.id, $event.target.value)" :disabled="providerSettingsSaving">
+                            <option value="__automatic__" x-text="`Автоматически · ${providerDefaultName(capability.id)} по умолчанию`"></option>
                             <template x-for="provider in providerSettings?.capabilities?.[capability.id]?.providers || []" :key="provider.id">
                                 <option :value="provider.id" x-text="provider.name"></option>
                             </template>
                         </select>
-                        <button class="shrink-0 rounded-xl px-3 py-3 text-xs font-semibold text-fuchsia-300 disabled:opacity-50" @click="resetProviderSelection(capability.id)" :disabled="providerSettingsSaving || providerSettings?.capabilities?.[capability.id]?.selected === providerSettings?.capabilities?.[capability.id]?.default">По умолчанию</button>
+                        <button class="shrink-0 rounded-xl px-3 py-3 text-xs font-semibold text-fuchsia-300 disabled:opacity-50" @click="resetProviderSelection(capability.id)" :disabled="providerSettingsSaving || !providerSettings?.capabilities?.[capability.id]?.selected">Автоматически</button>
                     </div>
                 </div>
             </template>

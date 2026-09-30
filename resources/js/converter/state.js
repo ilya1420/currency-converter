@@ -24,7 +24,7 @@ export function createConverterState(catalog) {
 
             return this.initializationPromise;
         },
-        async loadCatalog() {
+        async loadCatalog(strict = false) {
             try {
                 const data = await currencyApi.catalog();
                 if (!Array.isArray(data.currencies)) return;
@@ -33,7 +33,10 @@ export function createConverterState(catalog) {
                     this.meta[code] ??= { label: code, color: type === 'crypto' ? cryptoFallbackColor(code) : fiatFallbackColor(code) };
                     if (name) this.meta[code].name = name; if (icon) this.meta[code].icon = icon; if (flag) this.meta[code].flag = flag;
                 });
-            } catch { /* Built-in currencies keep the converter available offline. */ }
+            } catch (error) {
+                if (strict) throw error;
+                // Built-in currencies keep the converter available offline.
+            }
         },
         initializeLayout() {
             const saved = converterStorage.loadLayout();
