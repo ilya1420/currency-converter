@@ -10,7 +10,7 @@ use Tests\TestCase;
 
 class KrakenMarketDataProviderTest extends TestCase
 {
-    public function test_it_loads_a_market_snapshot_with_three_requests(): void
+    public function test_it_returns_normalized_chart_data_from_three_kraken_endpoints(): void
     {
         Http::fake([
             'https://api.kraken.com/0/public/OHLC*' => Http::response([
@@ -31,12 +31,11 @@ class KrakenMarketDataProviderTest extends TestCase
         ]);
 
         $provider = new KrakenMarketDataProvider(new KrakenAssetMapper);
-        $snapshot = $provider->snapshot(Currency::BTC, 60);
-        $provider->snapshot(Currency::BTC, 60);
+        $chart = $provider->chart(Currency::crypto('BTC', 'XBTUSD'), 60);
 
-        $this->assertCount(1, $snapshot['candles']);
-        $this->assertSame('65400', $snapshot['ticker']['last']);
-        $this->assertArrayNotHasKey('recentTrades', $snapshot);
+        $this->assertCount(1, $chart['candles']);
+        $this->assertSame('65400', $chart['ticker']['last']);
+        $this->assertSame([['65390', '1']], $chart['depth']['bids']);
         Http::assertSentCount(3);
     }
 }

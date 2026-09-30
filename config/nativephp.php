@@ -24,11 +24,20 @@ $config['cleanup_env_keys'] = [
 
 $config['cleanup_exclude_files'] = [
     ...$config['cleanup_exclude_files'],
+    // Build artifacts must never be bundled into the next application build.
+    'builds',
     '.phpunit.result.cache',
     '.npmrc',
     'package-lock.json',
     'tests',
     'credentials',
+    'AGENTS.md',
+    '.agents',
+    '.claude',
+    '.codex',
+    '.junie',
+    '.mcp.json',
+    'boost.json',
 ];
 
 return $config;

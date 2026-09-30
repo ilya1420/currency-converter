@@ -1,40 +1,87 @@
 <?php
 
+use App\Currency\Enums\ProviderCapability;
 use App\Currency\Providers\CoinGeckoCurrencyCatalogProvider;
 use App\Currency\Providers\CoinGeckoDailyChangeProvider;
 use App\Currency\Providers\CoinGeckoRateProvider;
 use App\Currency\Providers\KrakenCurrencyCatalogProvider;
+use App\Currency\Providers\KrakenMarketDataProvider;
 use App\Currency\Providers\KrakenRateProvider;
 use App\Currency\Providers\NbrbCurrencyCatalogProvider;
-use App\Currency\Providers\NbrbRateProvider;
-use App\Currency\Providers\KrakenMarketDataProvider;
 use App\Currency\Providers\NbrbMarketDataProvider;
+use App\Currency\Providers\NbrbRateProvider;
+
+$providerDefinitions = [
+    'nbrb' => [
+        'name' => 'НБРБ',
+        'adapters' => [
+            'catalog' => NbrbCurrencyCatalogProvider::class,
+            'fiat_rates' => NbrbRateProvider::class,
+            'fiat_daily_changes' => NbrbMarketDataProvider::class,
+            'fiat_market_data' => NbrbMarketDataProvider::class,
+        ],
+    ],
+    'kraken' => [
+        'name' => 'Kraken',
+        'adapters' => [
+            'catalog' => KrakenCurrencyCatalogProvider::class,
+            'crypto_rates' => KrakenRateProvider::class,
+            'crypto_daily_changes' => KrakenMarketDataProvider::class,
+            'crypto_market_data' => KrakenMarketDataProvider::class,
+        ],
+    ],
+    'coingecko' => [
+        'name' => 'CoinGecko',
+        'adapters' => [
+            'catalog' => CoinGeckoCurrencyCatalogProvider::class,
+            'crypto_rates' => CoinGeckoRateProvider::class,
+            'crypto_daily_changes' => CoinGeckoDailyChangeProvider::class,
+        ],
+    ],
+];
+
+$providerOrder = [
+    'catalog' => ['nbrb', 'kraken', 'coingecko'],
+    'fiat_rates' => ['nbrb'],
+    'crypto_rates' => ['kraken', 'coingecko'],
+    'fiat_daily_changes' => ['nbrb'],
+    'crypto_daily_changes' => ['coingecko', 'kraken'],
+    'fiat_market_data' => ['nbrb'],
+    'crypto_market_data' => ['kraken'],
+];
+$rateProviderOrder = ['nbrb', 'kraken', 'coingecko'];
+
+$providers = ['registry' => $providerDefinitions, 'priority' => $providerOrder];
+foreach ([
+    'catalog' => ['catalog'],
+    'daily_changes' => ['fiat_daily_changes', 'crypto_daily_changes'],
+    'market' => ['fiat_market_data', 'crypto_market_data'],
+] as $runtimeCapability => $capabilities) {
+    $providers[$runtimeCapability] = [];
+    foreach ($capabilities as $capability) {
+        foreach ($providerOrder[$capability] as $providerId) {
+            if (isset($providerDefinitions[$providerId]['adapters'][$capability])) {
+                $providers[$runtimeCapability][] = $providerDefinitions[$providerId]['adapters'][$capability];
+            }
+        }
+    }
+    $providers[$runtimeCapability] = array_values(array_unique($providers[$runtimeCapability]));
+}
+$providers['rates'] = [];
+foreach ($rateProviderOrder as $providerId) {
+    foreach ([ProviderCapability::FIAT_RATES->value, ProviderCapability::CRYPTO_RATES->value] as $capability) {
+        if (isset($providerDefinitions[$providerId]['adapters'][$capability])) {
+            $providers['rates'][] = $providerDefinitions[$providerId]['adapters'][$capability];
+        }
+    }
+}
+$providers['rates'] = array_values(array_unique($providers['rates']));
 
 return [
     'cache' => [
         'store' => env('CURRENCY_CACHE_STORE', 'file'),
     ],
-    'providers' => [
-        'catalog' => [
-            NbrbCurrencyCatalogProvider::class,
-            KrakenCurrencyCatalogProvider::class,
-            CoinGeckoCurrencyCatalogProvider::class,
-        ],
-        'rates' => [
-            NbrbRateProvider::class,
-            KrakenRateProvider::class,
-            CoinGeckoRateProvider::class,
-        ],
-        'daily_changes' => [
-            CoinGeckoDailyChangeProvider::class,
-            KrakenMarketDataProvider::class,
-            NbrbMarketDataProvider::class,
-        ],
-        'market' => [
-            KrakenMarketDataProvider::class,
-            NbrbMarketDataProvider::class,
-        ],
-    ],
+    'providers' => $providers,
     'catalog' => [
         'popular_limit' => (int) env('CURRENCY_POPULAR_LIMIT', 25),
     ],

@@ -42,6 +42,57 @@ test('concurrent conversion loads are coalesced into one request', async () => {
     }
 });
 
+test('partial failure marks the unavailable row while preserving stale rates and metadata', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        conversions: {
+            EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: true },
+            BYN: { error: 'Нет курса' },
+        },
+        changes: {},
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const state = conversionState();
+        const failedRow = { currency: 'BYN', result: '312', error: '', loading: false };
+        state.rows.push(failedRow);
+        state.factors.BYN = '3.12';
+
+        await state.loadAll();
+
+        assert.equal(state.rows[1].result, '92');
+        assert.equal(failedRow.error, 'Нет курса');
+        assert.equal(failedRow.result, '');
+        assert.equal(state.factors.BYN, undefined);
+        assert.deepEqual(state.sources, ['nbrb']);
+        assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
+        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('request failure preserves displayed values and their source metadata', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error('offline'); };
+
+    try {
+        const state = conversionState();
+        state.rows[1].result = '92';
+        state.sources = ['nbrb'];
+        state.lastUpdatedAt = '2026-09-28T00:00:00Z';
+
+        await state.loadAll();
+
+        assert.equal(state.rows[1].result, '92');
+        assert.deepEqual(state.sources, ['nbrb']);
+        assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
+        assert.equal(state.message, 'Не удалось обновить курс. Показаны последние значения.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('activating a converted row preserves its amount and recalculates the list', () => {
     const state = conversionState();
     state.rows[1].result = '92';

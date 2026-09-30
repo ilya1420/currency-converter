@@ -9,8 +9,8 @@ use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Services\CurrencyCache;
-use Illuminate\Http\Client\ConnectionException;
 use App\Currency\Services\ExternalApiClientFactory;
+use Illuminate\Http\Client\ConnectionException;
 
 final class CoinGeckoDailyChangeProvider implements DailyChangeProviderInterface
 {
@@ -74,5 +74,4 @@ final class CoinGeckoDailyChangeProvider implements DailyChangeProviderInterface
 
         return $changes;
     }
-
 }

@@ -28,4 +28,16 @@ export const currencyApi = {
     market(currency, interval, type) {
         return request(`/market/${currency}?interval=${interval}&type=${type}`);
     },
+    providerSettings() {
+        return request('/provider-settings');
+    },
+    selectProvider(capability, providerId) {
+        return request(`/provider-settings/${capability}`, {
+            method: 'PATCH', headers: JSON_HEADERS,
+            body: JSON.stringify({ provider_id: providerId }),
+        });
+    },
+    resetProvider(capability) {
+        return request(`/provider-settings/${capability}`, { method: 'DELETE' });
+    },
 };

@@ -7,7 +7,6 @@ use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\RateSource;
-use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\ProviderTimeoutException;
@@ -19,11 +18,6 @@ use Illuminate\Http\Client\ConnectionException;
 final class KrakenRateProvider implements RateProviderInterface
 {
     public function __construct(private KrakenAssetMapper $mapper, private ?ExternalApiClientFactory $clients = null) {}
-
-    public function source(): RateSource
-    {
-        return RateSource::KRAKEN;
-    }
 
     public function source(): RateSource
     {

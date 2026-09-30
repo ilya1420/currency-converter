@@ -8,8 +8,8 @@ use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ConversionService;
 use App\Currency\Services\CurrencyCatalog;
 use App\Currency\Services\DailyChangeService;
-use App\Http\Requests\BatchConvertCurrenciesRequest;
 use App\Http\Presenters\ConversionPresenter;
+use App\Http\Requests\BatchConvertCurrenciesRequest;
 use Illuminate\Http\JsonResponse;
 
 final class BatchConversionController

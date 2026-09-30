@@ -35,7 +35,7 @@ final class CurrencyCatalogController
                 ];
             }
         } catch (ProviderException) {
-            return response()->json(['message' => 'Currency catalog is temporarily unavailable.'], 503);
+            return response()->json(['message' => 'Каталог выбранного источника временно недоступен.'], 503);
         }
 
         return response()->json(['currencies' => array_values($currencies)]);

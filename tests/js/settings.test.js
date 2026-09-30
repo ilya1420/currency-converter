@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { currencyApi } from '../../resources/js/converter/api.js';
+import { providerSettingsMethods } from '../../resources/js/converter/settings.js';
+
+function settingsState() {
+    const state = {
+        providerSettingsOpen: false,
+        providerSettings: null,
+        providerSettingsLoading: false,
+        providerSettingsSaving: false,
+        providerSettingsError: '',
+        activeTab: 'converter',
+        refreshes: 0,
+        catalogReloads: 0,
+        async loadAll(refresh) { if (refresh) this.refreshes++; },
+        async loadCatalog() { this.catalogReloads++; },
+    };
+    Object.defineProperties(state, Object.getOwnPropertyDescriptors(providerSettingsMethods));
+    return state;
+}
+
+test('provider settings load on opening and can be selected and reset', async () => {
+    const original = {
+        providerSettings: currencyApi.providerSettings,
+        selectProvider: currencyApi.selectProvider,
+        resetProvider: currencyApi.resetProvider,
+    };
+    const selections = [];
+    currencyApi.providerSettings = async () => ({ capabilities: { crypto_rates: { selected: null, default: 'kraken', providers: [{ id: 'kraken', name: 'Kraken' }] } } });
+    currencyApi.selectProvider = async (...args) => selections.push(['select', ...args]);
+    currencyApi.resetProvider = async (...args) => selections.push(['reset', ...args]);
+
+    try {
+        const state = settingsState();
+        await state.openProviderSettings();
+        await state.saveProviderSelection('crypto_rates', 'coingecko');
+        await state.changeProviderSelection('crypto_rates', '__automatic__');
+        await state.saveProviderSelection('catalog', 'kraken');
+
+        assert.equal(state.providerSettingsOpen, true);
+        assert.equal(state.providerSettings.capabilities.crypto_rates.selected, null);
+        assert.equal(state.providerDefaultName('crypto_rates'), 'Kraken');
+        assert.deepEqual(selections, [
+            ['select', 'crypto_rates', 'coingecko'],
+            ['reset', 'crypto_rates'],
+            ['select', 'catalog', 'kraken'],
+        ]);
+        assert.equal(state.refreshes, 3);
+        assert.equal(state.catalogReloads, 1);
+        assert.equal(state.providerSettingsSaving, false);
+    } finally {
+        Object.assign(currencyApi, original);
+    }
+});

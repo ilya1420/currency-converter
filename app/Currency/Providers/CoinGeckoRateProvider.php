@@ -12,9 +12,9 @@ use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\CurrencyCache;
+use App\Currency\Services\ExternalApiClientFactory;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
-use App\Currency\Services\ExternalApiClientFactory;
 
 final class CoinGeckoRateProvider implements RateProviderInterface
 {
@@ -64,5 +64,4 @@ final class CoinGeckoRateProvider implements RateProviderInterface
 
         return new ExchangeRate($from, $to, (string) $price, RateSource::COINGECKO, new DateTimeImmutable($cached['fetchedAt'] ?? 'now'));
     }
-
 }

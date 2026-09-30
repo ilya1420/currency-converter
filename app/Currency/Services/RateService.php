@@ -5,6 +5,8 @@ namespace App\Currency\Services;
 use App\Currency\Contracts\RateProviderInterface;
 use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
+use App\Currency\Enums\CurrencyType;
+use App\Currency\Enums\ProviderCapability;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\RateUnavailableException;
@@ -18,7 +20,11 @@ final class RateService
     private array $resolvedRates = [];
 
     /** @param iterable<RateProviderInterface> $providers */
-    public function __construct(private ExchangeRateRepository $rates, private iterable $providers) {}
+    public function __construct(
+        private ExchangeRateRepository $rates,
+        private iterable $providers,
+        private ProviderSelectionService $selections,
+    ) {}
 
     public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
     {
@@ -27,9 +33,20 @@ final class RateService
             return $this->resolvedRates[$key];
         }
 
-        $staleRates = [];
-        foreach ($this->providers as $provider) {
+        $capability = $from->type === CurrencyType::CRYPTO
+            ? ProviderCapability::CRYPTO_RATES
+            : ProviderCapability::FIAT_RATES;
+        $configuredProvider = $this->selections->configured($capability);
+        $providers = $configuredProvider === null
+            ? $this->providers
+            : $this->selectedProvider($configuredProvider->adapterFor($capability));
+
+        foreach ($providers as $provider) {
             if (! $provider->supports($from, $to)) {
+                if ($configuredProvider !== null) {
+                    throw new RateUnavailableException("Selected provider [{$configuredProvider->id}] does not support {$from->code}/{$to->code}.");
+                }
+
                 continue;
             }
             $source = $provider->source();
@@ -42,16 +59,27 @@ final class RateService
             } catch (ProviderException $exception) {
                 $cached = $this->rates->findLatest($source, $from, $to);
                 if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
-                    $staleRates[] = $cached;
+                    return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
+                }
+
+                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", previous: $exception);
+            }
+        }
+        throw new RateUnavailableException("No rate is available for {$from->code}/{$to->code}.");
+    }
+
+    /** @return iterable<RateProviderInterface> */
+    private function selectedProvider(?string $adapter): iterable
+    {
+        if ($adapter !== null) {
+            foreach ($this->providers as $provider) {
+                if ($provider::class === $adapter) {
+                    return [$provider];
                 }
             }
         }
-        if ($staleRates !== []) {
-            $cached = $staleRates[0];
 
-            return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
-        }
-        throw new RateUnavailableException("No rate is available for {$from->code}/{$to->code}.");
+        throw new RateUnavailableException('The selected rate provider is not available in this application build.');
     }
 
     private function ttl(RateSource $source): int

@@ -72,5 +72,4 @@ final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderI
 
         return $response->json();
     }
-
 }

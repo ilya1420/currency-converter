@@ -8,8 +8,9 @@
 </head>
 <body class="h-[100dvh] overflow-hidden bg-[#09090B] font-sans text-[#F8FAFC] antialiased">
 <main class="mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden" x-data="converter([])">
-    <header class="flex h-8 shrink-0 items-center border-b border-white/5 px-5 pt-[env(safe-area-inset-top)]">
-        <p x-show="lastUpdatedLabel" x-cloak class="text-[11px] font-medium text-zinc-500" x-text="lastUpdatedLabel"></p>
+    <header class="z-20 flex min-h-10 h-auto shrink-0 items-end justify-between gap-3 border-b border-white/5 bg-[#09090B] px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <p x-show="sourceLabel" x-cloak class="truncate text-[11px] font-medium text-zinc-400" x-text="`Источник: ${sourceLabel}`"></p>
+        <p x-show="lastUpdatedLabel" x-cloak class="shrink-0 text-[11px] font-medium text-zinc-500" x-text="lastUpdatedLabel"></p>
     </header>
 
     <p x-show="activeTab === 'converter' && message" x-cloak class="mx-5 mb-3 shrink-0 text-xs text-pink-300" aria-live="polite"
@@ -67,7 +68,9 @@
                         <div class="w-20 shrink-0"><p class="truncate text-left text-base font-semibold" x-text="meta[row.currency].label"></p><p class="truncate text-[10px] text-zinc-500" x-text="currencyName(row.currency)"></p><p class="text-[10px] font-semibold" :class="dailyChangeClass(row.currency)" x-text="dailyChangeLabel(row.currency)"></p></div>
                         <button
                             class="min-w-0 flex-1 whitespace-nowrap text-right font-amount text-2xl font-medium tracking-tight tabular-nums outline-none transition active:scale-[0.98] active:text-fuchsia-200"
-                            @click.stop="activateRow(row)" :aria-label="`Ввести сумму в ${meta[row.currency].label}`"
+                            @click.stop="activateRow(row)" :disabled="Boolean(row.error)"
+                            :class="row.error ? 'text-pink-300' : ''"
+                            :aria-label="row.error ? `Курс ${meta[row.currency].label} недоступен: ${row.error}` : `Ввести сумму в ${meta[row.currency].label}`"
                             x-text="row.error || (row.currency === base ? activeAmountLabel : formatAmount(row.result, row.currency))"></button>
                     </div>
                 </div>
@@ -179,6 +182,9 @@
         <button class="grid h-8 w-8 place-items-center" @click="setTab('charts')" :class="activeTab === 'charts' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Графики">
             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 16V4m0 12h14M6 13l3-3 2 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
+        <button class="grid h-8 w-8 place-items-center text-zinc-500 active:text-fuchsia-300" @click="openProviderSettings" aria-label="Настройки провайдеров">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8.2 2.8h3.6l.5 2a6.5 6.5 0 0 1 1.2.7l1.9-.7 1.8 3.1-1.5 1.4a6.5 6.5 0 0 1 0 1.4l1.5 1.4-1.8 3.1-1.9-.7a6.5 6.5 0 0 1-1.2.7l-.5 2H8.2l-.5-2a6.5 6.5 0 0 1-1.2-.7l-1.9.7-1.8-3.1 1.5-1.4a6.5 6.5 0 0 1 0-1.4L2.8 7.9l1.8-3.1 1.9.7a6.5 6.5 0 0 1 1.2-.7l.5-2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
+        </button>
     </nav>
 
     <template x-if="pickerTarget !== null">
@@ -227,6 +233,34 @@
         </section>
     </div>
     </template>
+
+    <div x-show="providerSettingsOpen" x-cloak class="fixed inset-0 z-30 flex items-end bg-black/70" @click.self="providerSettingsOpen = false" @keydown.escape.window="providerSettingsOpen = false">
+        <section class="max-h-[82vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#18181B] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="provider-settings-title">
+            <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-zinc-600"></div>
+            <div class="mb-1 flex items-center justify-between gap-3">
+                <h2 id="provider-settings-title" class="text-lg font-bold">Источники курсов</h2>
+                <button class="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-zinc-400" @click="providerSettingsOpen = false" aria-label="Закрыть настройки">×</button>
+            </div>
+            <p class="mb-5 text-xs leading-relaxed text-zinc-500">Выберите встроенный источник для каждой capability. Для фиата и криптовалют выбор разделён там, где провайдеры отличаются. При ошибке выбранного источника автоматического переключения не будет.</p>
+            <p x-show="providerSettingsLoading" class="py-5 text-center text-sm text-zinc-500">Загрузка настроек…</p>
+            <p x-show="providerSettingsError" x-cloak class="mb-3 text-sm text-pink-300" role="alert" x-text="providerSettingsError"></p>
+            <template x-for="capability in providerCapabilities" :key="capability.id">
+                <div x-show="providerSettings?.capabilities?.[capability.id]" class="mb-3 rounded-2xl bg-[#27272A] p-4">
+                    <label class="mb-2 block text-xs font-semibold text-zinc-300" :for="`provider-${capability.id}`" x-text="capability.label"></label>
+                    <div class="flex items-center gap-2">
+                        <select class="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#18181B] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-400 disabled:opacity-50" :id="`provider-${capability.id}`" :value="providerSettings?.capabilities?.[capability.id]?.selected || '__automatic__'" @change="changeProviderSelection(capability.id, $event.target.value)" :disabled="providerSettingsSaving">
+                            <option value="__automatic__" x-text="`Автоматически · ${providerDefaultName(capability.id)} по умолчанию`"></option>
+                            <template x-for="provider in providerSettings?.capabilities?.[capability.id]?.providers || []" :key="provider.id">
+                                <option :value="provider.id" x-text="provider.name"></option>
+                            </template>
+                        </select>
+                        <button class="shrink-0 rounded-xl px-3 py-3 text-xs font-semibold text-fuchsia-300 disabled:opacity-50" @click="resetProviderSelection(capability.id)" :disabled="providerSettingsSaving || !providerSettings?.capabilities?.[capability.id]?.selected">Автоматически</button>
+                    </div>
+                </div>
+            </template>
+            <p class="mt-4 text-[11px] leading-relaxed text-zinc-600">Ключи API и дополнительные настройки провайдеров пока не поддерживаются.</p>
+        </section>
+    </div>
 </main>
 </body>
 </html>

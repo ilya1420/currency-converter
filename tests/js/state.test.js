@@ -28,3 +28,17 @@ test('layout restoration keeps saved currencies even when catalog is incomplete'
         globalThis.localStorage = previousStorage;
     }
 });
+
+test('source label names built-in providers and removes duplicates', () => {
+    const state = createConverterState([]);
+    state.sources = ['nbrb', 'kraken', 'nbrb'];
+
+    assert.equal(state.sourceLabel, 'НБРБ, Kraken');
+});
+
+test('last updated label is hidden when current results have no provider metadata', () => {
+    const state = createConverterState([]);
+    state.lastUpdatedAt = '2026-09-28T00:00:00Z';
+
+    assert.equal(state.lastUpdatedLabel, '');
+});

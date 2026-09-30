@@ -24,7 +24,7 @@ export function createConverterState(catalog) {
 
             return this.initializationPromise;
         },
-        async loadCatalog() {
+        async loadCatalog(strict = false) {
             try {
                 const data = await currencyApi.catalog();
                 if (!Array.isArray(data.currencies)) return;
@@ -33,7 +33,10 @@ export function createConverterState(catalog) {
                     this.meta[code] ??= { label: code, color: type === 'crypto' ? cryptoFallbackColor(code) : fiatFallbackColor(code) };
                     if (name) this.meta[code].name = name; if (icon) this.meta[code].icon = icon; if (flag) this.meta[code].flag = flag;
                 });
-            } catch { /* Built-in currencies keep the converter available offline. */ }
+            } catch (error) {
+                if (strict) throw error;
+                // Built-in currencies keep the converter available offline.
+            }
         },
         initializeLayout() {
             const saved = converterStorage.loadLayout();
@@ -66,7 +69,15 @@ export function createConverterState(catalog) {
             if (!this.rows.some((item) => item.currency === this.base)) this.base = this.rows[0]?.currency || 'USD';
             void this.loadAll();
         },
-        get lastUpdatedLabel() { return this.lastUpdatedAt ? `Обновлено ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(this.lastUpdatedAt))}` : ''; },
+        get sourceLabel() {
+            if (!this.sources.length) return '';
+            const names = { nbrb: 'НБРБ', kraken: 'Kraken', coingecko: 'CoinGecko' };
+            return [...new Set(this.sources)].map((source) => names[source] || source).join(', ');
+        },
+        get lastUpdatedLabel() {
+            if (!this.lastUpdatedAt || !this.sources.length) return '';
+            return `Обновлено ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(this.lastUpdatedAt))}`;
+        },
         currencyType(currency) { return this.catalog.find(({ code }) => code === currency)?.type || 'fiat'; },
         fiatFractionDigits(currency) { if (ZERO_DECIMAL.has(currency)) return 0; if (THREE_DECIMAL.has(currency)) return 3; return FOUR_DECIMAL.has(currency) ? 4 : 2; },
         inputFractionDigits() { return this.currencyType(this.base) === 'crypto' ? 6 : this.fiatFractionDigits(this.base); },

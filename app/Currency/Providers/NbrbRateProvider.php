@@ -18,6 +18,7 @@ use Brick\Math\RoundingMode;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Throwable;
 
 final class NbrbRateProvider implements RateProviderInterface
@@ -26,6 +27,7 @@ final class NbrbRateProvider implements RateProviderInterface
 
     /** @var array<mixed>|null */
     private ?array $catalog = null;
+
     private ?DateTimeImmutable $catalogFetchedAt = null;
 
     public function source(): RateSource
@@ -71,7 +73,7 @@ final class NbrbRateProvider implements RateProviderInterface
         );
     }
 
-    private function request(): \Illuminate\Http\Client\PendingRequest
+    private function request(): PendingRequest
     {
         return ($this->clients ??= app(ExternalApiClientFactory::class))->for('nbrb');
     }
