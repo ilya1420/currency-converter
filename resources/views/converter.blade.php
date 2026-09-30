@@ -175,15 +175,18 @@
         </button>
     </section>
 
-    <nav class="flex shrink-0 items-center justify-around border-t border-white/5 bg-[#111114] px-20 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2" aria-label="Основная навигация">
-        <button class="grid h-8 w-8 place-items-center" @click="activeTab === 'converter' ? toggleKeyboard() : setTab('converter')" :class="activeTab === 'converter' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Конвертер">
+    <nav class="flex shrink-0 items-center justify-around border-t border-white/5 bg-[#111114] px-12 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-1.5" aria-label="Основная навигация">
+        <button class="flex min-h-11 min-w-14 flex-col items-center justify-center gap-1 text-[10px] font-medium leading-none" @click="activeTab === 'converter' ? toggleKeyboard() : setTab('converter')" :class="activeTab === 'converter' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Конвертер">
             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6h10m0 0-3-3m3 3-3 3M16 14H6m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Конвертер</span>
         </button>
-        <button class="grid h-8 w-8 place-items-center" @click="setTab('charts')" :class="activeTab === 'charts' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Графики">
+        <button class="flex min-h-11 min-w-14 flex-col items-center justify-center gap-1 text-[10px] font-medium leading-none" @click="setTab('charts')" :class="activeTab === 'charts' ? 'text-fuchsia-300' : 'text-zinc-500'" aria-label="Графики">
             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 16V4m0 12h14M6 13l3-3 2 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Графики</span>
         </button>
-        <button class="grid h-8 w-8 place-items-center text-zinc-500 active:text-fuchsia-300" @click="openProviderSettings" aria-label="Настройки провайдеров">
+        <button class="flex min-h-11 min-w-14 flex-col items-center justify-center gap-1 text-[10px] font-medium leading-none text-zinc-500 active:text-fuchsia-300" @click="openProviderSettings" aria-label="Настройки провайдеров">
             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8.2 2.8h3.6l.5 2a6.5 6.5 0 0 1 1.2.7l1.9-.7 1.8 3.1-1.5 1.4a6.5 6.5 0 0 1 0 1.4l1.5 1.4-1.8 3.1-1.9-.7a6.5 6.5 0 0 1-1.2.7l-.5 2H8.2l-.5-2a6.5 6.5 0 0 1-1.2-.7l-1.9.7-1.8-3.1 1.5-1.4a6.5 6.5 0 0 1 0-1.4L2.8 7.9l1.8-3.1 1.9.7a6.5 6.5 0 0 1 1.2-.7l.5-2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg>
+            <span>Источники</span>
         </button>
     </nav>
 
