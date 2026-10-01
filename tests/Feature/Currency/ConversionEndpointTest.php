@@ -9,6 +9,7 @@ use App\Currency\Repositories\ExchangeRateRepository;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -52,6 +53,69 @@ class ConversionEndpointTest extends TestCase
             ->assertJsonPath('conversions.BYN.sources.0', 'nbrb')
             ->assertJsonPath('conversions.BYN.isStale', true)
             ->assertJsonPath('conversions.EUR.error', 'Нет курса');
+    }
+
+    public function test_batch_conversion_does_not_wait_for_nbrb_daily_changes(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json')),
+            'https://api.nbrb.by/exrates/rates/dynamics/*' => Http::failedConnection(),
+            'https://api.kraken.com/0/public/AssetPairs*' => Http::response(['error' => [], 'result' => []]),
+            'https://api.coingecko.com/api/v3/coins/markets*' => Http::response([]),
+        ]);
+
+        $this->postJson('/conversions', ['from' => 'USD', 'fromType' => 'fiat', 'targets' => ['BYN']])
+            ->assertOk()
+            ->assertJsonPath('conversions.BYN.factor', '3.120000000000000000')
+            ->assertJsonMissingPath('changes');
+
+        Http::assertNotSent(static fn (Request $request): bool => str_contains($request->url(), '/dynamics/'));
+    }
+
+    public function test_daily_change_connection_failure_returns_null_instead_of_server_error(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json')),
+            'https://api.nbrb.by/exrates/rates/dynamics/*' => Http::failedConnection(),
+            'https://api.kraken.com/0/public/AssetPairs*' => Http::response(['error' => [], 'result' => []]),
+            'https://api.coingecko.com/api/v3/coins/markets*' => Http::response([]),
+        ]);
+
+        $this->getJson('/daily-changes?currencies[]=USD')
+            ->assertOk()
+            ->assertJsonPath('changes.USD', null);
+    }
+
+    public function test_usd_to_crypto_uses_crypto_usd_rate_without_fiat_rates(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json')),
+            'https://api.kraken.com/0/public/AssetPairs*' => Http::response([
+                'error' => [],
+                'result' => ['XBTUSD' => ['base' => 'XXBT', 'quote' => 'ZUSD', 'altname' => 'XBTUSD']],
+            ]),
+            'https://api.kraken.com/0/public/Ticker*' => Http::response([
+                'error' => [],
+                'result' => ['XXBTZUSD' => ['c' => ['64000'], 'o' => '63000']],
+            ]),
+            'https://api.coingecko.com/api/v3/coins/markets*' => Http::response([]),
+        ]);
+
+        $this->postJson('/conversion', [
+            'amount' => '1',
+            'from' => 'USD',
+            'fromType' => 'fiat',
+            'to' => 'BTC',
+            'toType' => 'crypto',
+        ])
+            ->assertOk()
+            ->assertJsonPath('factor', '0.000015625000000000')
+            ->assertJsonPath('sources.0', 'kraken')
+            ->assertJsonPath('isStale', false);
+
     }
 
     public function test_it_converts_usd_to_byn(): void

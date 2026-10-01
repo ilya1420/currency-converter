@@ -19,6 +19,9 @@ final class RateService
     /** @var array<string, ExchangeRate> */
     private array $resolvedRates = [];
 
+    /** @var array<class-string<RateProviderInterface>, ProviderException> */
+    private array $providerFailures = [];
+
     /** @param iterable<RateProviderInterface> $providers */
     public function __construct(
         private ExchangeRateRepository $rates,
@@ -58,9 +61,20 @@ final class RateService
             if (! $forceRefresh && ($fresh = $this->rates->findFresh($source, $from, $to, $freshAfter))) {
                 return $this->resolvedRates[$key] = $fresh;
             }
+
+            if (isset($this->providerFailures[$provider::class])) {
+                $cached = $this->rates->findLatest($source, $from, $to);
+                if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
+                    return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
+                }
+
+                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", previous: $this->providerFailures[$provider::class]);
+            }
+
             try {
                 return $this->resolvedRates[$key] = $this->rates->save($provider->getRate($from, $to));
             } catch (ProviderException $exception) {
+                $this->providerFailures[$provider::class] = $exception;
                 $cached = $this->rates->findLatest($source, $from, $to);
                 if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
                     return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);

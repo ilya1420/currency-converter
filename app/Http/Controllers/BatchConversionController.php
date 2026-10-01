@@ -7,14 +7,13 @@ use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ConversionService;
 use App\Currency\Services\CurrencyCatalog;
-use App\Currency\Services\DailyChangeService;
 use App\Http\Presenters\ConversionPresenter;
 use App\Http\Requests\BatchConvertCurrenciesRequest;
 use Illuminate\Http\JsonResponse;
 
 final class BatchConversionController
 {
-    public function __invoke(BatchConvertCurrenciesRequest $request, ConversionService $converter, CurrencyCatalog $catalog, ConversionPresenter $presenter, DailyChangeService $dailyChanges): JsonResponse
+    public function __invoke(BatchConvertCurrenciesRequest $request, ConversionService $converter, CurrencyCatalog $catalog, ConversionPresenter $presenter): JsonResponse
     {
         $data = $request->validated();
 
@@ -31,9 +30,6 @@ final class BatchConversionController
             }
         }
 
-        return response()->json([
-            'conversions' => $conversions,
-            'changes' => $dailyChanges->forCurrencies([$from->code, ...array_keys($conversions)]),
-        ]);
+        return response()->json(['conversions' => $conversions]);
     }
 }
