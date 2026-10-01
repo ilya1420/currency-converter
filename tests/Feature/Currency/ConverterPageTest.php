@@ -21,6 +21,10 @@ class ConverterPageTest extends TestCase
             ->assertSee('<span>Скрыть калькулятор</span>', false)
             ->assertSee('Настройки провайдеров')
             ->assertSee('Добавить валюту')
-            ->assertSee('Избранные валютные пары');
+            ->assertSee('Избранные валютные пары')
+            ->assertSee('История конвертаций')
+            ->assertSee('Сохранить текущий расчёт')
+            ->assertSee('Вернуть в конвертер')
+            ->assertSee('Очистить историю');
     }
 }

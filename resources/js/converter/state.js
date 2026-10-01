@@ -31,6 +31,7 @@ export function createConverterState(catalog) {
                 this.catalog = data.currencies; this.currencies = data.currencies.map(({ code }) => code);
                 data.currencies.forEach(({ code, type, name, icon, flag }) => {
                     this.meta[code] ??= { label: code, color: type === 'crypto' ? cryptoFallbackColor(code) : fiatFallbackColor(code) };
+                    this.meta[code].type = type;
                     if (name) this.meta[code].name = name; if (icon) this.meta[code].icon = icon; if (flag) this.meta[code].flag = flag;
                 });
             } catch (error) {
@@ -83,7 +84,7 @@ export function createConverterState(catalog) {
             if (!this.lastUpdatedAt || !this.sources.length) return '';
             return `Обновлено ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(this.lastUpdatedAt))}`;
         },
-        currencyType(currency) { return this.catalog.find(({ code }) => code === currency)?.type || 'fiat'; },
+        currencyType(currency) { return this.catalog.find(({ code }) => code === currency)?.type || this.meta[currency]?.type || 'fiat'; },
         fiatFractionDigits(currency) { if (ZERO_DECIMAL.has(currency)) return 0; if (THREE_DECIMAL.has(currency)) return 3; return FOUR_DECIMAL.has(currency) ? 4 : 2; },
         inputFractionDigits() { return this.currencyType(this.base) === 'crypto' ? 6 : this.fiatFractionDigits(this.base); },
         formatAmount(value, currency = this.base) { const crypto = this.currencyType(currency) === 'crypto'; return formatDecimalAmount(value, { fractionDigits: crypto ? 6 : this.fiatFractionDigits(currency), maxFractionDigits: 6, trimTrailingZeros: crypto }); },

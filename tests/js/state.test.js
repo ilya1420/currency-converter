@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createConverterState } from '../../resources/js/converter/state.js';
+import { converterStorage } from '../../resources/js/converter/storage.js';
 
 test('layout restoration keeps saved currencies even when catalog is incomplete', () => {
     const values = new Map([
@@ -47,6 +48,34 @@ test('favorite pairs are restored locally and malformed entries are ignored', ()
         const state = createConverterState([]);
 
         assert.deepEqual(state.favoritePairs, [{ from: 'USD', to: 'EUR' }]);
+    } finally {
+        globalThis.localStorage = previousStorage;
+    }
+});
+
+test('conversion history ignores malformed entries and retains at most fifty records', () => {
+    const entries = Array.from({ length: 51 }, (_, index) => ({
+        id: `entry-${index}`,
+        base: 'USD',
+        amount: String(index + 1),
+        savedAt: '2026-10-01T10:00:00.000Z',
+        rows: [{ currency: 'USD', result: String(index + 1) }, { currency: 'EUR', result: '0.9' }],
+    }));
+    entries.splice(12, 0, { id: 'bad-entry', base: 'USD', amount: 'invalid', rows: [] });
+    const values = new Map([['currency-converter-history', JSON.stringify(entries)]]);
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: (key) => values.delete(key),
+    };
+
+    try {
+        const history = converterStorage.loadConversionHistory();
+
+        assert.equal(history.length, 50);
+        assert.equal(history.some(({ id }) => id === 'bad-entry'), false);
+        assert.equal(history[0].id, 'entry-0');
     } finally {
         globalThis.localStorage = previousStorage;
     }

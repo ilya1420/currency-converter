@@ -3,6 +3,7 @@ import { chartMethods } from './converter/charts.js';
 import { conversionMethods } from './converter/conversion.js';
 import { currencyListMethods } from './converter/currency-list.js';
 import { gestureMethods } from './converter/gestures.js';
+import { historyMethods } from './converter/history.js';
 import { providerSettingsMethods } from './converter/settings.js';
 import { createConverterState } from './converter/state.js';
 
@@ -17,5 +18,6 @@ window.converter = (catalog) => [
     conversionMethods,
     currencyListMethods,
     gestureMethods,
+    historyMethods,
     providerSettingsMethods,
 ].reduce(attachMethods, createConverterState(catalog));
