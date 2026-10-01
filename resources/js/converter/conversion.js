@@ -29,6 +29,7 @@ export const conversionMethods = {
         const token = ++this.requestToken;
         this.loading = true; this.message = '';
         this.rows.forEach((row) => { row.loading = true; row.error = ''; });
+        void this.loadDailyChanges(token, targets);
         try {
             const data = await currencyApi.conversions({ from: this.base, fromType: this.currencyType(this.base), targets, refresh });
             if (token !== this.requestToken) return;
@@ -68,11 +69,34 @@ export const conversionMethods = {
             }
         }
     },
+    async loadDailyChanges(token, currencies) {
+        const targets = [...new Set(currencies.filter((currency) => currency !== this.base))];
+        this.rows.forEach((row) => {
+            if (targets.includes(row.currency)) row.dailyChange = null;
+        });
+
+        if (!targets.length) return;
+
+        try {
+            const data = await currencyApi.dailyChanges(targets);
+            if (token !== this.requestToken) return;
+
+            this.rows.forEach((row) => {
+                if (Object.hasOwn(data.changes ?? {}, row.currency)) {
+                    row.dailyChange = data.changes[row.currency];
+                }
+            });
+        } catch {
+            // Daily changes are optional market data and must not affect conversion.
+        }
+    },
     async loadRow(row, refresh = false, token = this.requestToken) {
         if (row.currency === this.base) {
             row.result = this.amount;
+            row.dailyChange = null;
             return;
         }
+        void this.loadDailyChanges(token, [row.currency]);
         const pair = `${this.base}:${row.currency}`;
         row.loading = true; row.error = '';
         try {

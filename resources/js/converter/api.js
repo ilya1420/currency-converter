@@ -19,6 +19,12 @@ export const currencyApi = {
             body: JSON.stringify({ from, fromType, targets, refresh }),
         });
     },
+    dailyChanges(currencies) {
+        const query = new URLSearchParams();
+        currencies.forEach((currency) => query.append('currencies[]', currency));
+
+        return request(`/daily-changes?${query.toString()}`);
+    },
     conversion({ from, fromType, to, toType, refresh }) {
         return request('/conversion', {
             method: 'POST', headers: JSON_HEADERS,
