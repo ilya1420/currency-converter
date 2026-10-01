@@ -13,6 +13,7 @@ final class ProviderSelectionService
     public function __construct(
         private ProviderRegistry $registry,
         private ProviderSelectionRepository $selections,
+        private ProviderCredentialService $credentials,
     ) {}
 
     public function selected(ProviderCapability $capability): ProviderDefinition
@@ -42,6 +43,10 @@ final class ProviderSelectionService
             throw new InvalidArgumentException("Provider [{$providerId}] does not support [{$capability->value}].");
         }
 
+        if ((bool) config("currency.providers.registry.{$providerId}.requires_api_key") && ! $this->credentials->isConfigured($providerId)) {
+            throw new InvalidArgumentException("Provider [{$providerId}] requires a valid API key.");
+        }
+
         $this->selections->save($capability, $providerId);
 
         return $provider;
@@ -54,9 +59,24 @@ final class ProviderSelectionService
         return $this->defaultFor($capability);
     }
 
+    public function isAvailableForAutomaticSelection(string $adapter): bool
+    {
+        foreach ($this->registry->all() as $provider) {
+            if (! in_array($adapter, $provider->adapters, true)) {
+                continue;
+            }
+
+            return ! (bool) config("currency.providers.registry.{$provider->id}.requires_api_key")
+                || $this->credentials->isConfigured($provider->id);
+        }
+
+        return true;
+    }
+
     private function defaultFor(ProviderCapability $capability): ProviderDefinition
     {
-        return $this->registry->forCapability($capability)[0]
+        return collect($this->registry->forCapability($capability))
+            ->first(fn (ProviderDefinition $provider): bool => $this->isAvailableForAutomaticSelection($provider->adapterFor($capability)))
             ?? throw new LogicException("No provider is registered for [{$capability->value}].");
     }
 }

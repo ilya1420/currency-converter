@@ -24,6 +24,8 @@ class ProviderSettingsEndpointTest extends TestCase
 
     public function test_it_saves_a_valid_rate_provider_selection(): void
     {
+        config(['currency.coingecko.api_key' => 'valid-demo-key']);
+
         $this->patchJson('/provider-settings/crypto_rates', ['provider_id' => 'coingecko'])
             ->assertOk()
             ->assertJsonPath('selected', 'coingecko');
@@ -45,6 +47,8 @@ class ProviderSettingsEndpointTest extends TestCase
 
     public function test_it_resets_selection_to_default(): void
     {
+        config(['currency.coingecko.api_key' => 'valid-demo-key']);
+
         $this->patchJson('/provider-settings/crypto_rates', ['provider_id' => 'coingecko'])->assertOk();
 
         $this->deleteJson('/provider-settings/crypto_rates')

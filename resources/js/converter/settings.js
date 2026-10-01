@@ -81,6 +81,21 @@ export const providerSettingsMethods = {
     async reloadProviderSettings() {
         this.providerSettings = await currencyApi.providerSettings();
     },
+    async saveCoinGeckoKey() {
+        if (this.providerSettingsSaving || !this.coingeckoApiKey.trim()) return;
+
+        this.providerSettingsSaving = true;
+        this.providerSettingsError = '';
+        try {
+            await currencyApi.saveCoinGeckoKey(this.coingeckoApiKey.trim());
+            this.coingeckoApiKey = '';
+            await this.reloadProviderSettings();
+        } catch (error) {
+            this.providerSettingsError = error.message || 'Не удалось проверить ключ CoinGecko.';
+        } finally {
+            this.providerSettingsSaving = false;
+        }
+    },
     async refreshAfterProviderSelection(capability) {
         if (capability === 'catalog') await this.loadCatalog(true);
         await this.loadAll(true);

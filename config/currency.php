@@ -32,6 +32,7 @@ $providerDefinitions = [
     ],
     'coingecko' => [
         'name' => 'CoinGecko',
+        'requires_api_key' => true,
         'adapters' => [
             'catalog' => CoinGeckoCurrencyCatalogProvider::class,
             'crypto_rates' => CoinGeckoRateProvider::class,
@@ -45,7 +46,7 @@ $providerOrder = [
     'fiat_rates' => ['nbrb'],
     'crypto_rates' => ['kraken', 'coingecko'],
     'fiat_daily_changes' => ['nbrb'],
-    'crypto_daily_changes' => ['coingecko', 'kraken'],
+    'crypto_daily_changes' => ['kraken', 'coingecko'],
     'fiat_market_data' => ['nbrb'],
     'crypto_market_data' => ['kraken'],
 ];

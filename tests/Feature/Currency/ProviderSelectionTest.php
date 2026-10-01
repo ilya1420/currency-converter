@@ -22,6 +22,7 @@ class ProviderSelectionTest extends TestCase
 
     public function test_it_persists_an_override_for_only_the_selected_capability(): void
     {
+        config(['currency.coingecko.api_key' => 'test-demo-key']);
         $selections = app(ProviderSelectionService::class);
         $selections->select(ProviderCapability::CRYPTO_RATES, 'coingecko');
 
@@ -43,6 +44,7 @@ class ProviderSelectionTest extends TestCase
 
     public function test_reset_removes_the_override_and_restores_the_default_provider(): void
     {
+        config(['currency.coingecko.api_key' => 'test-demo-key']);
         $selections = app(ProviderSelectionService::class);
         $selections->select(ProviderCapability::CRYPTO_RATES, 'coingecko');
 

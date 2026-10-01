@@ -10,6 +10,8 @@ use Throwable;
 
 final class ExternalApiClientFactory
 {
+    public function __construct(private ProviderCredentialService $credentials) {}
+
     public function for(string $provider): PendingRequest
     {
         $request = Http::baseUrl((string) config("currency.{$provider}.base_url"))
@@ -17,8 +19,8 @@ final class ExternalApiClientFactory
             ->connectTimeout((int) config('currency.http.connect_timeout'))
             ->timeout((int) config('currency.http.timeout'));
 
-        if ($provider === 'coingecko' && config('currency.coingecko.api_key')) {
-            $request = $request->withHeader('x-cg-demo-api-key', config('currency.coingecko.api_key'));
+        if ($provider === 'coingecko' && ($apiKey = $this->credentials->apiKey($provider)) !== null) {
+            $request = $request->withHeader('x-cg-demo-api-key', $apiKey);
         }
 
         if ($provider === 'nbrb') {

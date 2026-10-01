@@ -29,7 +29,7 @@ class ProviderRegistryTest extends TestCase
             array_map(static fn ($provider): string => $provider->id, $registry->forCapability(ProviderCapability::FIAT_DAILY_CHANGES)),
         );
         $this->assertSame(
-            ['coingecko', 'kraken'],
+            ['kraken', 'coingecko'],
             array_map(static fn ($provider): string => $provider->id, $registry->forCapability(ProviderCapability::CRYPTO_DAILY_CHANGES)),
         );
         $this->assertSame(

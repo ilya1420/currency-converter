@@ -42,6 +42,10 @@ final class RateService
             : $this->selectedProvider($configuredProvider->adapterFor($capability));
 
         foreach ($providers as $provider) {
+            if ($configuredProvider === null && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
+                continue;
+            }
+
             if (! $provider->supports($from, $to)) {
                 if ($configuredProvider !== null) {
                     throw new RateUnavailableException("Selected provider [{$configuredProvider->id}] does not support {$from->code}/{$to->code}.");

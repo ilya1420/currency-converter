@@ -31,6 +31,12 @@ export const currencyApi = {
     providerSettings() {
         return request('/provider-settings');
     },
+    saveCoinGeckoKey(apiKey) {
+        return request('/provider-settings/coingecko', {
+            method: 'PUT', headers: JSON_HEADERS,
+            body: JSON.stringify({ api_key: apiKey }),
+        });
+    },
     selectProvider(capability, providerId) {
         return request(`/provider-settings/${capability}`, {
             method: 'PATCH', headers: JSON_HEADERS,

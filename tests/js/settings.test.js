@@ -11,6 +11,7 @@ function settingsState() {
         providerSettingsLoading: false,
         providerSettingsSaving: false,
         providerSettingsError: '',
+        coingeckoApiKey: '',
         activeTab: 'converter',
         refreshes: 0,
         catalogReloads: 0,
@@ -49,6 +50,29 @@ test('provider settings load on opening and can be selected and reset', async ()
         ]);
         assert.equal(state.refreshes, 3);
         assert.equal(state.catalogReloads, 1);
+        assert.equal(state.providerSettingsSaving, false);
+    } finally {
+        Object.assign(currencyApi, original);
+    }
+});
+
+test('CoinGecko key is cleared only after successful verification and save', async () => {
+    const original = {
+        providerSettings: currencyApi.providerSettings,
+        saveCoinGeckoKey: currencyApi.saveCoinGeckoKey,
+    };
+    let savedKey = null;
+    currencyApi.saveCoinGeckoKey = async (apiKey) => { savedKey = apiKey; };
+    currencyApi.providerSettings = async () => ({ provider_settings: { coingecko: { configured: true } } });
+
+    try {
+        const state = settingsState();
+        state.coingeckoApiKey = ' demo-key ';
+        await state.saveCoinGeckoKey();
+
+        assert.equal(savedKey, 'demo-key');
+        assert.equal(state.coingeckoApiKey, '');
+        assert.equal(state.providerSettings.provider_settings.coingecko.configured, true);
         assert.equal(state.providerSettingsSaving, false);
     } finally {
         Object.assign(currencyApi, original);

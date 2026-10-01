@@ -34,6 +34,10 @@ final class CurrencyCatalog
             $providers = $this->orderedProviders($selected?->adapterFor(ProviderCapability::CATALOG));
             foreach ($providers as $provider) {
                 $isSelected = $selected !== null && $provider::class === $selected->adapterFor(ProviderCapability::CATALOG);
+                if (! $isSelected && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
+                    continue;
+                }
+
                 try {
                     foreach ($provider->currencies() as $definition) {
                         $key = "{$definition->type->value}:{$definition->code}";
