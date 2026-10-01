@@ -20,6 +20,7 @@ class ConverterPageTest extends TestCase
             ->assertDontSee('dailyChangeLabel')
             ->assertSee('<span>Скрыть калькулятор</span>', false)
             ->assertSee('Настройки провайдеров')
-            ->assertSee('Добавить валюту');
+            ->assertSee('Добавить валюту')
+            ->assertSee('Избранные валютные пары');
     }
 }

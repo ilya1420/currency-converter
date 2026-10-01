@@ -29,6 +29,29 @@ test('layout restoration keeps saved currencies even when catalog is incomplete'
     }
 });
 
+test('favorite pairs are restored locally and malformed entries are ignored', () => {
+    const values = new Map([
+        ['currency-converter-favorite-pairs', JSON.stringify([
+            { from: 'USD', to: 'EUR' },
+            { from: 'USD', to: 'USD' },
+            { from: '../USD', to: 'EUR' },
+        ])],
+    ]);
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+    };
+
+    try {
+        const state = createConverterState([]);
+
+        assert.deepEqual(state.favoritePairs, [{ from: 'USD', to: 'EUR' }]);
+    } finally {
+        globalThis.localStorage = previousStorage;
+    }
+});
+
 test('first-run hint is shown once and dismissal is persisted locally', () => {
     const values = new Map();
     const previousStorage = globalThis.localStorage;

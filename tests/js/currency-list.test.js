@@ -16,6 +16,7 @@ function listState() {
             { id: 1, currency: 'USD', previousCurrency: 'USD', result: '100', error: '' },
             { id: 2, currency: 'EUR', previousCurrency: 'EUR', result: '92', error: '' },
         ],
+        favoritePairs: [],
         base: 'USD',
         pickerTarget: null,
         pickerSearch: '',
@@ -53,6 +54,53 @@ test('add mode adds a currency once and removes an already selected currency', (
 
     state.chooseCurrency('BTC');
     assert.deepEqual(state.rows.map(({ currency }) => currency), ['USD', 'EUR']);
+});
+
+test('favorite pairs are directional, persisted, and can be applied to the converter', () => {
+    const state = listState();
+    const stored = new Map();
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = { setItem: (key, value) => stored.set(key, value) };
+    let saveCount = 0;
+    let loadCount = 0;
+    state.save = () => { saveCount++; };
+    state.loadAll = () => { loadCount++; };
+
+    try {
+        state.toggleFavoritePair('EUR');
+
+        assert.deepEqual(state.favoritePairs, [{ from: 'USD', to: 'EUR' }]);
+        assert.equal(state.isFavoritePair('EUR'), true);
+        assert.equal(state.isFavoritePair('USD'), false);
+        assert.equal(stored.get('currency-converter-favorite-pairs'), '[{"from":"USD","to":"EUR"}]');
+
+        state.base = 'EUR';
+        state.applyFavoritePair(state.favoritePairs[0]);
+
+        assert.equal(state.base, 'USD');
+        assert.equal(loadCount, 1);
+        assert.equal(saveCount, 1);
+        assert.equal(state.canApplyFavoritePair({ from: 'USD', to: 'MISSING' }), false);
+    } finally {
+        globalThis.localStorage = previousStorage;
+    }
+});
+
+test('removing a favorite pair persists the remaining pairs', () => {
+    const state = listState();
+    state.favoritePairs = [{ from: 'USD', to: 'EUR' }, { from: 'EUR', to: 'BTC' }];
+    const stored = new Map();
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = { setItem: (key, value) => stored.set(key, value) };
+
+    try {
+        state.removeFavoritePair({ from: 'USD', to: 'EUR' });
+
+        assert.deepEqual(state.favoritePairs, [{ from: 'EUR', to: 'BTC' }]);
+        assert.equal(stored.get('currency-converter-favorite-pairs'), '[{"from":"EUR","to":"BTC"}]');
+    } finally {
+        globalThis.localStorage = previousStorage;
+    }
 });
 
 test('currency search matches both code and localized name', () => {

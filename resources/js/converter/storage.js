@@ -1,6 +1,7 @@
 const LAYOUT_KEY = 'currency-converter-layout';
 const CRYPTO_GROUPS_KEY = 'currency-converter-crypto-groups';
 const FIRST_RUN_HINT_KEY = 'currency-converter-first-run-hint-seen';
+const FAVORITE_PAIRS_KEY = 'currency-converter-favorite-pairs';
 
 function read(key, fallback) {
     try {
@@ -34,5 +35,20 @@ export const converterStorage = {
     },
     saveCryptoGroups(groups) {
         localStorage.setItem(CRYPTO_GROUPS_KEY, JSON.stringify(groups));
+    },
+    loadFavoritePairs() {
+        const pairs = read(FAVORITE_PAIRS_KEY, []);
+        if (!Array.isArray(pairs)) return [];
+
+        return pairs.filter((pair) => pair
+            && typeof pair.from === 'string'
+            && /^[A-Z0-9]{2,10}$/.test(pair.from)
+            && typeof pair.to === 'string'
+            && /^[A-Z0-9]{2,10}$/.test(pair.to)
+            && pair.from !== pair.to)
+            .map(({ from, to }) => ({ from, to }));
+    },
+    saveFavoritePairs(pairs) {
+        localStorage.setItem(FAVORITE_PAIRS_KEY, JSON.stringify(pairs));
     },
 };

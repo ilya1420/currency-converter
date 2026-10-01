@@ -19,6 +19,7 @@ export function uiSlice() {
         pickerSwipeOffset: 0,
         ignoreNextRowClick: false,
         cryptoGroups: converterStorage.loadCryptoGroups(),
+        favoritePairs: converterStorage.loadFavoritePairs(),
         keys: ['C', '⌫', '%', '/', '7', '8', '9', '*', '4', '5', '6', '-', '1', '2', '3', '+'],
     };
 }

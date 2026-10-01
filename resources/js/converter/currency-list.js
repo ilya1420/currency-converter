@@ -1,4 +1,5 @@
 import { converterStorage } from './storage.js';
+import { row } from './state/converter-slice.js';
 
 export const currencyListMethods = {
     get currencyGroups() {
@@ -52,6 +53,42 @@ export const currencyListMethods = {
     isSelected(currency) {
         if (this.pickerTarget === 'add') return this.rows.some((row) => row.currency === currency);
         return this.rows.find((row) => row.id === this.pickerTarget)?.currency === currency;
+    },
+    isFavoritePair(currency) {
+        return currency !== this.base && this.favoritePairs.some((pair) => pair.from === this.base && pair.to === currency);
+    },
+    toggleFavoritePair(currency) {
+        if (currency === this.base) return;
+
+        const favorite = { from: this.base, to: currency };
+        const index = this.favoritePairs.findIndex((pair) => pair.from === favorite.from && pair.to === favorite.to);
+        if (index >= 0) this.favoritePairs.splice(index, 1);
+        else this.favoritePairs.push(favorite);
+
+        converterStorage.saveFavoritePairs(this.favoritePairs);
+        this.buzz();
+    },
+    canApplyFavoritePair(pair) {
+        return this.currencies.includes(pair.from) && this.currencies.includes(pair.to);
+    },
+    applyFavoritePair(pair) {
+        if (!this.canApplyFavoritePair(pair)) return;
+
+        this.base = pair.from;
+        for (const currency of [pair.from, pair.to]) {
+            if (!this.rows.some((item) => item.currency === currency)) {
+                this.rows.push(row(this.nextId++, currency));
+            }
+        }
+        this.factors = {};
+        this.save();
+        void this.loadAll();
+        this.buzz();
+    },
+    removeFavoritePair(pair) {
+        this.favoritePairs = this.favoritePairs.filter((favorite) => favorite.from !== pair.from || favorite.to !== pair.to);
+        converterStorage.saveFavoritePairs(this.favoritePairs);
+        this.buzz();
     },
     canChoose(currency) {
         if (!this.currencies.includes(currency)) return false;

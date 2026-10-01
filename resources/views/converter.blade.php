@@ -18,6 +18,17 @@
         <button class="shrink-0 py-0.5 text-xs font-semibold text-fuchsia-300 active:text-pink-300" @click="dismissFirstRunHint" aria-label="Закрыть подсказку">Понятно</button>
     </aside>
 
+    <section x-show="activeTab === 'converter' && favoritePairs.length" x-cloak class="shrink-0 border-b border-white/5 px-4 py-2" aria-label="Избранные валютные пары">
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            <template x-for="pair in favoritePairs" :key="`${pair.from}:${pair.to}`">
+                <div class="flex shrink-0 items-center overflow-hidden rounded-full bg-white/[0.06]">
+                    <button class="px-3 py-2 text-xs font-semibold text-zinc-300 transition active:text-fuchsia-300 disabled:opacity-40" @click="applyFavoritePair(pair)" :disabled="!canApplyFavoritePair(pair)" :aria-label="`Открыть пару ${pair.from} к ${pair.to}`" x-text="`${pair.from} → ${pair.to}`"></button>
+                    <button class="px-2 py-2 text-xs text-zinc-500 active:text-pink-300" @click="removeFavoritePair(pair)" :aria-label="`Удалить пару ${pair.from} к ${pair.to} из избранного`">×</button>
+                </div>
+            </template>
+        </div>
+    </section>
+
     <p x-show="activeTab === 'converter' && message" x-cloak class="mx-5 mb-3 shrink-0 text-xs text-pink-300" aria-live="polite"
        x-text="message"></p>
 
@@ -77,6 +88,9 @@
                             :class="row.error ? 'text-pink-300' : ''"
                             :aria-label="row.error ? `Курс ${meta[row.currency].label} недоступен: ${row.error}` : `Ввести сумму в ${meta[row.currency].label}`"
                             x-text="row.error || (row.currency === base ? activeAmountLabel : formatAmount(row.result, row.currency))"></button>
+                        <button class="grid h-10 w-8 shrink-0 place-items-center text-zinc-600 transition active:scale-110 disabled:opacity-20" @click.stop="toggleFavoritePair(row.currency)" @touchstart.stop @touchmove.stop @touchend.stop :disabled="row.currency === base" :aria-label="isFavoritePair(row.currency) ? `Убрать пару ${base} к ${row.currency} из избранного` : `Добавить пару ${base} к ${row.currency} в избранное`" :title="isFavoritePair(row.currency) ? 'Убрать из избранного' : 'В избранное'" :class="isFavoritePair(row.currency) ? 'text-amber-300' : ''">
+                            <svg class="h-5 w-5" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2.5 2.3 4.7 5.2.8-3.8 3.7.9 5.2-4.6-2.5-4.6 2.5.9-5.2-3.8-3.7 5.2-.8L10 2.5Z" :fill="isFavoritePair(row.currency) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                        </button>
                     </div>
                 </div>
                 </template>
