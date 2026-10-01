@@ -14,6 +14,7 @@ final class ExternalApiClientFactory
 
     public function for(string $provider): PendingRequest
     {
+        $retryAttempts = (int) config("currency.{$provider}.http.retry_attempts", 1);
         $request = Http::baseUrl((string) config("currency.{$provider}.base_url"))
             ->acceptJson()
             ->connectTimeout((int) config('currency.http.connect_timeout'))
@@ -23,9 +24,9 @@ final class ExternalApiClientFactory
             $request = $request->withHeader('x-cg-demo-api-key', $apiKey);
         }
 
-        if ($provider === 'nbrb') {
+        if ($retryAttempts > 1) {
             $request = $request->retry(
-                (int) config('currency.http.retry_times'),
+                $retryAttempts,
                 (int) config('currency.http.retry_delay_ms'),
                 static fn (Throwable $exception): bool => $exception instanceof ConnectionException
                     || ($exception instanceof RequestException && $exception->response->serverError()),
