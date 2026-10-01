@@ -10,6 +10,7 @@ function listState() {
             { code: 'EUR', type: 'fiat', name: 'Евро' },
             { code: 'BTC', type: 'crypto', name: 'Bitcoin', group: 'alt' },
         ],
+        currencies: ['USD', 'EUR', 'BTC'],
         cryptoGroups: { fiat: true, stable: true, meme: true, alt: true, other: true },
         rows: [
             { id: 1, currency: 'USD', previousCurrency: 'USD', result: '100', error: '' },
@@ -77,4 +78,14 @@ test('ordinary currencies can be hidden like any other group', () => {
     } finally {
         globalThis.localStorage = previousStorage;
     }
+});
+
+test('currencies missing from the selected provider stay visible as unavailable and cannot be chosen', () => {
+    const state = listState();
+    state.rows.push({ id: 3, currency: 'ZEC', previousCurrency: 'ZEC' });
+    state.pickerTarget = 'add';
+
+    assert.deepEqual(state.unavailableCurrencies, ['ZEC']);
+    assert.equal(state.canChoose('ZEC'), false);
+    assert.equal(state.canChoose('BTC'), true);
 });

@@ -58,13 +58,13 @@ class ProviderCredentialSettingsTest extends TestCase
         );
     }
 
-    public function test_it_does_not_allow_selecting_coingecko_before_configuring_a_key(): void
+    public function test_it_allows_selecting_coingecko_without_configuring_a_key(): void
     {
         $this->patchJson('/provider-settings/crypto_rates', ['provider_id' => 'coingecko'])
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'Сначала добавьте и проверьте ключ этого провайдера.');
+            ->assertOk()
+            ->assertJsonPath('selected', 'coingecko');
 
-        $this->assertDatabaseMissing('provider_selections', ['capability' => 'crypto_rates']);
+        $this->assertDatabaseHas('provider_selections', ['capability' => 'crypto_rates', 'provider_id' => 'coingecko']);
     }
 
     public function test_the_configured_key_is_used_for_regular_coingecko_requests(): void

@@ -22,9 +22,11 @@ final class CurrencyCatalog
     public function all(): array
     {
         $selected = $this->selections->configured(ProviderCapability::CATALOG);
-        $cacheKey = 'currency-catalog:v6:'.($selected?->id ?? 'automatic');
+        $cryptoProvider = $this->selections->selected(ProviderCapability::CRYPTO_RATES);
+        $cryptoCatalogAdapter = $cryptoProvider->adapterFor(ProviderCapability::CATALOG);
+        $cacheKey = 'currency-catalog:v8:'.($selected?->id ?? 'automatic').':crypto-'.$cryptoProvider->id;
 
-        return $this->cache()->remember($cacheKey, now()->addMinutes(30), function () use ($selected): array {
+        return $this->cache()->remember($cacheKey, now()->addMinutes(30), function () use ($selected, $cryptoCatalogAdapter): array {
             // BYN is the application's base currency, not a remote catalog entry.
             // Keep the core fiat set available while a remote catalog is unavailable.
             $currencies = [];
@@ -32,24 +34,44 @@ final class CurrencyCatalog
                 $currencies["fiat:{$code}"] = Currency::fiat($code);
             }
             $providers = $this->orderedProviders($selected?->adapterFor(ProviderCapability::CATALOG));
+            if ($cryptoCatalogAdapter !== null) {
+                $cryptoSource = array_values(array_filter($providers, static fn (CurrencyCatalogProviderInterface $provider): bool => $provider::class === $cryptoCatalogAdapter));
+                if ($cryptoSource !== []) {
+                    $providers = [...$cryptoSource, ...array_values(array_filter($providers, static fn (CurrencyCatalogProviderInterface $provider): bool => $provider::class !== $cryptoCatalogAdapter))];
+                }
+            }
+
             foreach ($providers as $provider) {
                 $isSelected = $selected !== null && $provider::class === $selected->adapterFor(ProviderCapability::CATALOG);
-                if (! $isSelected && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
+                $isCryptoSource = $cryptoCatalogAdapter !== null && $provider::class === $cryptoCatalogAdapter;
+                if (! $isSelected && ! $isCryptoSource && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
                     continue;
                 }
 
                 try {
                     foreach ($provider->currencies() as $definition) {
                         $key = "{$definition->type->value}:{$definition->code}";
-                        if ($selected !== null && ! $isSelected && ! isset($currencies[$key])) {
+                        if ($definition->type === CurrencyType::CRYPTO && ! $isCryptoSource) {
+                            if (! isset($currencies[$key])) {
+                                continue;
+                            }
+                        }
+                        if ($isCryptoSource && $definition->type !== CurrencyType::CRYPTO) {
+                            continue;
+                        }
+
+                        if ($selected !== null && ! $isSelected && ! $isCryptoSource && ! isset($currencies[$key])) {
                             continue;
                         }
                         $current = $currencies[$key] ?? null;
+                        $group = $definition->type === CurrencyType::CRYPTO
+                            ? ($isCryptoSource ? $definition->group : $current?->group)
+                            : ($definition->group ?? $current?->group);
                         $currencies[$key] = new Currency($definition->code, $definition->type,
                             $current?->providerSymbol ?? $definition->providerSymbol,
                             $definition->name ?? $current?->name,
                             $definition->coinGeckoId ?? $current?->coinGeckoId,
-                            $definition->group ?? $current?->group,
+                            $group,
                         );
                     }
                 } catch (ProviderException) {

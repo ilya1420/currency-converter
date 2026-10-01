@@ -27,6 +27,7 @@ final class KrakenCurrencyCatalogProvider implements CurrencyCatalogProviderInte
         }
 
         $currencies = [];
+        $popularLimit = max(1, (int) config('currency.catalog.popular_limit', 25));
         foreach ($pairs as $pair) {
             $base = is_array($pair) ? $pair['base'] ?? null : null;
             $quote = is_array($pair) ? $pair['quote'] ?? null : null;
@@ -36,8 +37,10 @@ final class KrakenCurrencyCatalogProvider implements CurrencyCatalogProviderInte
                 });
                 if (preg_match('/^[A-Z0-9]{2,10}$/', $code)) {
                     $pairName = $pair['altname'] ?? null;
-                    if (is_string($pairName)) {
-                        $currencies[$code] = new CurrencyDefinition($code, CurrencyType::CRYPTO, $pairName);
+                    if (is_string($pairName) && ! isset($currencies[$code])) {
+                        $rank = count($currencies);
+                        $group = $rank < $popularLimit ? 'popular' : 'other';
+                        $currencies[$code] = new CurrencyDefinition($code, CurrencyType::CRYPTO, $pairName, null, null, $group);
                     }
                 }
             }

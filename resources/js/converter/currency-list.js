@@ -10,6 +10,10 @@ export const currencyListMethods = {
             { title: 'Все остальные', key: 'other', type: 'crypto', items: visible('other') ? crypto.filter(({ group }) => group !== 'popular').map(({ code }) => code) : [] },
         ];
     },
+    get unavailableCurrencies() {
+        const available = new Set(this.currencies);
+        return [...new Set(this.rows.map(({ currency }) => currency).filter((currency) => !available.has(currency)))];
+    },
     get cryptoGroupFilters() {
         return [
             { key: 'popular', label: 'Популярные' },
@@ -50,6 +54,7 @@ export const currencyListMethods = {
         return this.rows.find((row) => row.id === this.pickerTarget)?.currency === currency;
     },
     canChoose(currency) {
+        if (!this.currencies.includes(currency)) return false;
         if (this.pickerTarget === 'add') return true;
         const row = this.rows.find((item) => item.id === this.pickerTarget);
         return !this.rows.some((item) => item !== row && item.currency === currency);

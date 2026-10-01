@@ -38,18 +38,19 @@ test('provider settings load on opening and can be selected and reset', async ()
         await state.openProviderSettings();
         await state.saveProviderSelection('crypto_rates', 'coingecko');
         await state.changeProviderSelection('crypto_rates', '__automatic__');
-        await state.saveProviderSelection('catalog', 'kraken');
+        await state.saveProviderSelection('crypto_rates', 'coingecko');
 
         assert.equal(state.providerSettingsOpen, true);
         assert.equal(state.providerSettings.capabilities.crypto_rates.selected, null);
         assert.equal(state.providerDefaultName('crypto_rates'), 'Kraken');
+        assert.equal(state.providerCapabilities.some(({ id }) => id === 'catalog'), false);
         assert.deepEqual(selections, [
             ['select', 'crypto_rates', 'coingecko'],
             ['reset', 'crypto_rates'],
-            ['select', 'catalog', 'kraken'],
+            ['select', 'crypto_rates', 'coingecko'],
         ]);
         assert.equal(state.refreshes, 3);
-        assert.equal(state.catalogReloads, 1);
+        assert.equal(state.catalogReloads, 3);
         assert.equal(state.providerSettingsSaving, false);
     } finally {
         Object.assign(currencyApi, original);

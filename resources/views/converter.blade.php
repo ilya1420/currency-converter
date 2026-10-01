@@ -237,6 +237,18 @@
                     </div>
                 </div>
             </template>
+            <div x-show="unavailableCurrencies.length && filteredCurrencies(unavailableCurrencies).length" class="mb-5">
+                <p class="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">Недоступны у выбранного источника</p>
+                <div class="overflow-hidden rounded-2xl bg-[#27272A]">
+                    <template x-for="currency in filteredCurrencies(unavailableCurrencies)" :key="`unavailable-${currency}`">
+                        <button class="flex w-full items-center gap-3 border-b border-white/5 px-4 py-3.5 text-left opacity-45 last:border-0" disabled>
+                            <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/5 text-xs font-black text-zinc-400" x-text="badgeText(currency)"></span>
+                            <span class="min-w-0 flex-1"><span class="block truncate font-semibold text-zinc-300" x-text="currencyInfo(currency).label || currency"></span><span class="block truncate text-[11px] text-zinc-500" x-text="currencyName(currency)"></span></span>
+                            <span class="text-[10px] text-amber-300">Недоступна</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
         </section>
     </div>
     </template>
