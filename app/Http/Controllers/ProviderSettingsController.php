@@ -16,14 +16,20 @@ final class ProviderSettingsController
     public function index(ProviderRegistry $registry, ProviderSelectionService $selections, ProviderCredentialService $credentials): JsonResponse
     {
         return response()->json([
+            'providers' => array_map(fn (ProviderDefinition $provider): array => $this->provider($provider, $credentials), $registry->all()),
             'capabilities' => collect(ProviderCapability::cases())
-                ->mapWithKeys(fn (ProviderCapability $capability): array => [
-                    $capability->value => [
+                ->mapWithKeys(function (ProviderCapability $capability) use ($registry, $selections, $credentials): array {
+                    $providers = $registry->forCapability($capability);
+                    if ($providers === []) {
+                        return [];
+                    }
+
+                    return [$capability->value => [
                         'selected' => $selections->configured($capability)?->id,
-                        'default' => $registry->forCapability($capability)[0]->id,
-                        'providers' => array_map(fn (ProviderDefinition $provider): array => $this->provider($provider, $credentials), $registry->forCapability($capability)),
-                    ],
-                ]),
+                        'default' => $providers[0]->id,
+                        'providers' => array_map(fn (ProviderDefinition $provider): array => $this->provider($provider, $credentials), $providers),
+                    ]];
+                }),
             'provider_settings' => [
                 'coingecko' => ['configured' => $credentials->isConfigured('coingecko')],
             ],
@@ -78,7 +84,7 @@ final class ProviderSettingsController
         return $capability;
     }
 
-    /** @return array{id: string, name: string, requires_api_key: bool, configured: bool} */
+    /** @return array{id: string, name: string, capabilities: list<string>, requires_api_key: bool, configured: bool} */
     private function provider(ProviderDefinition $provider, ProviderCredentialService $credentials): array
     {
         $requiresApiKey = (bool) config("currency.providers.registry.{$provider->id}.requires_api_key");
@@ -86,6 +92,7 @@ final class ProviderSettingsController
         return [
             'id' => $provider->id,
             'name' => $provider->name,
+            'capabilities' => array_map(static fn (ProviderCapability $capability): string => $capability->value, $provider->capabilities()),
             'requires_api_key' => $requiresApiKey,
             'configured' => ! $requiresApiKey || $credentials->isConfigured($provider->id),
         ];

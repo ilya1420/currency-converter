@@ -44,6 +44,7 @@ test('provider settings load on opening and can be selected and reset', async ()
         assert.equal(state.providerSettings.capabilities.crypto_rates.selected, null);
         assert.equal(state.providerDefaultName('crypto_rates'), 'Kraken');
         assert.equal(state.providerCapabilities.some(({ id }) => id === 'catalog'), false);
+        assert.deepEqual(state.providerCapabilityLabels({ capabilities: ['catalog', 'crypto_rates', 'unknown'] }), ['Каталог валют', 'Курсы криптовалют', 'unknown']);
         assert.deepEqual(selections, [
             ['select', 'crypto_rates', 'coingecko'],
             ['reset', 'crypto_rates'],

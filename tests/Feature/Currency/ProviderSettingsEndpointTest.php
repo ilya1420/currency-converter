@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Currency;
 
+use App\Currency\Services\ProviderRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -15,9 +16,17 @@ class ProviderSettingsEndpointTest extends TestCase
             ->assertOk()
             ->assertJsonPath('capabilities.fiat_rates.selected', null)
             ->assertJsonPath('capabilities.fiat_rates.default', 'nbrb')
+            ->assertJsonPath('providers.0.id', 'nbrb')
+            ->assertJsonPath('providers.0.capabilities.0', 'catalog')
+            ->assertJsonPath('providers.0.capabilities.1', 'fiat_rates')
+            ->assertJsonPath('providers.0.capabilities.2', 'fiat_daily_changes')
+            ->assertJsonPath('providers.0.capabilities.3', 'fiat_market_data')
             ->assertJsonPath('capabilities.crypto_rates.selected', null)
             ->assertJsonPath('capabilities.crypto_rates.default', 'kraken')
             ->assertJsonPath('capabilities.crypto_rates.providers.1.id', 'coingecko')
+            ->assertJsonPath('providers.1.capabilities.1', 'crypto_rates')
+            ->assertJsonPath('providers.1.capabilities.3', 'crypto_market_data')
+            ->assertJsonPath('providers.2.capabilities.2', 'crypto_daily_changes')
             ->assertJsonPath('capabilities.fiat_market_data.default', 'nbrb')
             ->assertJsonPath('capabilities.crypto_market_data.default', 'kraken');
     }
@@ -34,6 +43,18 @@ class ProviderSettingsEndpointTest extends TestCase
             'capability' => 'crypto_rates',
             'provider_id' => 'coingecko',
         ]);
+    }
+
+    public function test_settings_endpoint_omits_capabilities_without_compatible_providers(): void
+    {
+        app()->instance(ProviderRegistry::class, new ProviderRegistry([
+            'nbrb' => config('currency.providers.registry.nbrb'),
+        ]));
+
+        $this->getJson('/provider-settings')
+            ->assertOk()
+            ->assertJsonMissingPath('capabilities.crypto_rates')
+            ->assertJsonMissingPath('capabilities.crypto_market_data');
     }
 
     public function test_it_rejects_provider_that_does_not_support_capability(): void
