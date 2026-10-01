@@ -52,7 +52,7 @@ test('partial failure marks the unavailable row while preserving stale rates and
         return new Response(JSON.stringify({
             conversions: {
                 EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: true },
-                BYN: { error: 'Нет курса' },
+                BYN: { error: 'provider_rate_limited', message: 'Kraken временно ограничил запросы.', provider: 'kraken' },
             },
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -66,12 +66,13 @@ test('partial failure marks the unavailable row while preserving stale rates and
         await state.loadAll();
 
         assert.equal(state.rows[1].result, '92');
-        assert.equal(failedRow.error, 'Нет курса');
+        assert.equal(failedRow.error, 'Лимит API');
+        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы. Kraken временно ограничил запросы.');
         assert.equal(failedRow.result, '');
         assert.equal(state.factors.BYN, undefined);
         assert.deepEqual(state.sources, ['nbrb']);
         assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
-        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы.');
+        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы. Kraken временно ограничил запросы.');
     } finally {
         globalThis.fetch = originalFetch;
     }

@@ -42,9 +42,12 @@ export const conversionMethods = {
                 }
                 const conversion = data.conversions[row.currency];
                 if (conversion?.error) {
-                    row.error = conversion.error;
+                    row.error = this.errorLabel(conversion.error);
                     row.result = '';
                     delete this.factors[row.currency];
+                    if (conversion.message && !this.message.includes(conversion.message)) {
+                        this.message = [this.message, conversion.message].filter(Boolean).join(' ');
+                    }
                     return;
                 }
                 this.factors[row.currency] = conversion.factor;
@@ -107,11 +110,23 @@ export const conversionMethods = {
             this.sources = [...new Set([...this.sources, ...data.sources])];
             this.lastUpdatedAt = data.updatedAt;
             if (data.isStale) this.message = 'Нет сети. Используются сохранённые курсы.';
-        } catch {
-            if (token === this.requestToken && pair === `${this.base}:${row.currency}`) row.error = 'Нет курса';
+        } catch (error) {
+            if (token === this.requestToken && pair === `${this.base}:${row.currency}`) {
+                row.error = this.errorLabel(error.code);
+                this.message = error.message || 'Не удалось получить курс для выбранной валюты.';
+            }
         } finally {
             if (token === this.requestToken) row.loading = false;
         }
+    },
+    errorLabel(code) {
+        return ({
+            provider_rate_limited: 'Лимит API',
+            provider_timeout: 'Таймаут',
+            provider_unavailable: 'Нет связи',
+            unsupported_pair: 'Нет пары',
+            rate_unavailable: 'Нет курса',
+        })[code] || 'Нет курса';
     },
     activateRow(row) {
         if (!row.result || row.error) return;
