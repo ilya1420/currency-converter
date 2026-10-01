@@ -63,10 +63,15 @@ final class ConversionService
     /** @return array{string, list<ExchangeRate>} */
     private function fiatToCrypto(string $amount, Currency $from, Currency $to, bool $forceRefresh): array
     {
-        $sourceByn = $this->fiatToByn($from, $forceRefresh);
         $usd = Currency::fiat('USD');
-        $usdByn = $this->fiatToByn($usd, $forceRefresh);
         $cryptoRate = $this->rates->getRate($to, $usd, $forceRefresh);
+
+        if ($from->code === 'USD') {
+            return [$this->calculator->divide($amount, $cryptoRate->rate), [$cryptoRate]];
+        }
+
+        $sourceByn = $this->fiatToByn($from, $forceRefresh);
+        $usdByn = $this->fiatToByn($usd, $forceRefresh);
         $usd = $this->calculator->convertThroughBase($amount, $sourceByn->rate, $usdByn->rate);
 
         return [$this->calculator->divide($usd, $cryptoRate->rate), [$sourceByn, $usdByn, $cryptoRate]];

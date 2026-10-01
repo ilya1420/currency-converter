@@ -33,7 +33,8 @@ final class KrakenCurrencyCatalogProvider implements CurrencyCatalogProviderInte
             $quote = is_array($pair) ? $pair['quote'] ?? null : null;
             if (is_string($base) && in_array($quote, ['USD', 'ZUSD'], true)) {
                 $code = strtoupper(match ($base) {
-                    'XXBT', 'XBT' => 'BTC', default => preg_replace('/^[XZ]/', '', $base) ?? $base
+                    'XXBT', 'XBT' => 'BTC',
+                    default => str_starts_with($base, 'X') && strlen($base) === 4 ? substr($base, 1) : $base,
                 });
                 if (preg_match('/^[A-Z0-9]{2,10}$/', $code)) {
                     $pairName = $pair['altname'] ?? null;

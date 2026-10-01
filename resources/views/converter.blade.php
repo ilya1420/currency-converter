@@ -9,6 +9,9 @@
 <body class="h-[100dvh] overflow-hidden bg-[#09090B] font-sans text-[#F8FAFC] antialiased">
 <main class="mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden" x-data="converter([])">
     <header class="z-20 flex min-h-10 h-auto shrink-0 items-end justify-between gap-3 border-b border-white/5 bg-[#09090B] px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button x-show="activeTab === 'converter'" x-cloak class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-400 transition active:text-fuchsia-300" @click="historyOpen = true" aria-label="История конвертаций" title="История конвертаций">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M10 5.5V10l3 1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
         <p x-show="sourceLabel" x-cloak class="truncate text-[11px] font-medium text-zinc-400" x-text="`Источник: ${sourceLabel}`"></p>
         <p x-show="lastUpdatedLabel" x-cloak class="shrink-0 text-[11px] font-medium text-zinc-500" x-text="lastUpdatedLabel"></p>
     </header>
@@ -17,6 +20,17 @@
         <p class="min-w-0 flex-1 text-xs leading-relaxed text-zinc-300">Нажмите на значок валюты, чтобы заменить её. «Добавить валюту» добавит ещё одну строку.</p>
         <button class="shrink-0 py-0.5 text-xs font-semibold text-fuchsia-300 active:text-pink-300" @click="dismissFirstRunHint" aria-label="Закрыть подсказку">Понятно</button>
     </aside>
+
+    <section x-show="activeTab === 'converter' && favoritePairs.length" x-cloak class="shrink-0 border-b border-white/5 px-4 py-2" aria-label="Избранные валютные пары">
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            <template x-for="pair in favoritePairs" :key="`${pair.from}:${pair.to}`">
+                <div class="flex shrink-0 items-center overflow-hidden rounded-full bg-white/[0.06]">
+                    <button class="px-3 py-2 text-xs font-semibold text-zinc-300 transition active:text-fuchsia-300 disabled:opacity-40" @click="applyFavoritePair(pair)" :disabled="!canApplyFavoritePair(pair)" :aria-label="`Открыть пару ${pair.from} к ${pair.to}`" x-text="`${pair.from} → ${pair.to}`"></button>
+                    <button class="px-2 py-2 text-xs text-zinc-500 active:text-pink-300" @click="removeFavoritePair(pair)" :aria-label="`Удалить пару ${pair.from} к ${pair.to} из избранного`">×</button>
+                </div>
+            </template>
+        </div>
+    </section>
 
     <p x-show="activeTab === 'converter' && message" x-cloak class="mx-5 mb-3 shrink-0 text-xs text-pink-300" aria-live="polite"
        x-text="message"></p>
@@ -70,13 +84,16 @@
                             <img x-show="meta[row.currency].icon || meta[row.currency].flag" x-cloak :src="meta[row.currency].icon || meta[row.currency].flag" class="h-12 w-12" :class="currencyType(row.currency) === 'crypto' ? 'object-contain' : 'currency-flag-image'" :alt="meta[row.currency].label">
                             <span x-show="!meta[row.currency].icon && !meta[row.currency].flag" class="max-w-9 truncate text-center font-black text-white" :class="badgeTextClass(row.currency)" x-text="badgeText(row.currency)"></span>
                         </button>
-                        <div class="w-20 shrink-0"><p class="truncate text-left text-base font-semibold" x-text="meta[row.currency].label"></p><p class="truncate text-[10px] text-zinc-500" x-text="currencyName(row.currency)"></p></div>
+                        <div class="w-20 shrink-0"><p class="truncate text-left text-base font-semibold" x-text="meta[row.currency].label"></p><p class="truncate text-[10px] text-zinc-500" x-text="currencyName(row.currency)"></p><p x-show="row.dailyChange !== null && row.dailyChange !== undefined" class="truncate text-[10px] font-semibold tabular-nums" :class="row.dailyChange >= 0 ? 'text-emerald-400' : 'text-pink-300'" x-text="`${row.dailyChange >= 0 ? '+' : ''}${Number(row.dailyChange).toFixed(2)}%`" :aria-label="`Дневное изменение ${Number(row.dailyChange).toFixed(2)}%`"></p></div>
                         <button
                             class="min-w-0 flex-1 whitespace-nowrap text-right font-amount text-2xl font-medium tracking-tight tabular-nums outline-none transition active:scale-[0.98] active:text-fuchsia-200"
                             @click.stop="activateRow(row)" :disabled="Boolean(row.error)"
                             :class="row.error ? 'text-pink-300' : ''"
                             :aria-label="row.error ? `Курс ${meta[row.currency].label} недоступен: ${row.error}` : `Ввести сумму в ${meta[row.currency].label}`"
                             x-text="row.error || (row.currency === base ? activeAmountLabel : formatAmount(row.result, row.currency))"></button>
+                        <button class="grid h-10 w-8 shrink-0 place-items-center text-zinc-600 transition active:scale-110 disabled:opacity-20" @click.stop="toggleFavoritePair(row.currency)" @touchstart.stop @touchmove.stop @touchend.stop :disabled="row.currency === base" :aria-label="isFavoritePair(row.currency) ? `Убрать пару ${base} к ${row.currency} из избранного` : `Добавить пару ${base} к ${row.currency} в избранное`" :title="isFavoritePair(row.currency) ? 'Убрать из избранного' : 'В избранное'" :class="isFavoritePair(row.currency) ? 'text-amber-300' : ''">
+                            <svg class="h-5 w-5" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2.5 2.3 4.7 5.2.8-3.8 3.7.9 5.2-4.6-2.5-4.6 2.5.9-5.2-3.8-3.7 5.2-.8L10 2.5Z" :fill="isFavoritePair(row.currency) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                        </button>
                     </div>
                 </div>
                 </template>
@@ -252,6 +269,51 @@
         </section>
     </div>
     </template>
+
+    <div x-show="historyOpen" x-cloak class="fixed inset-0 z-30 flex items-end bg-black/70" @click.self="historyOpen = false" @keydown.escape.window="historyOpen = false">
+        <section class="max-h-[82vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#18181B] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="conversion-history-title">
+            <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-zinc-600"></div>
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                    <h2 id="conversion-history-title" class="text-lg font-bold">История конвертаций</h2>
+                    <p class="mt-1 text-[11px] text-zinc-500">Сохраняется только по вашему нажатию · последние 50 записей</p>
+                </div>
+                <button class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/5 text-zinc-400" @click="historyOpen = false" aria-label="Закрыть историю">×</button>
+            </div>
+            <button class="mb-4 w-full rounded-xl bg-fuchsia-500 px-4 py-3 text-sm font-semibold text-white transition active:bg-fuchsia-400 disabled:opacity-40" @click="saveCurrentConversion" :disabled="!canSaveCurrentConversion">Сохранить текущий расчёт</button>
+            <div x-show="!conversionHistory.length" class="rounded-2xl bg-[#27272A] px-4 py-8 text-center">
+                <p class="text-sm font-medium text-zinc-300">История пока пуста</p>
+                <p class="mt-1 text-xs text-zinc-500">Сохраните текущий расчёт, чтобы быстро вернуться к нему позже.</p>
+            </div>
+            <div x-show="conversionHistory.length" class="mb-3 flex justify-end">
+                <button x-show="!confirmClearHistory" class="text-xs font-semibold text-zinc-500 active:text-pink-300" @click="confirmClearHistory = true">Очистить историю</button>
+                <div x-show="confirmClearHistory" class="flex items-center gap-3 text-xs" role="alert">
+                    <span class="text-zinc-400">Удалить все записи?</span>
+                    <button class="font-semibold text-zinc-300" @click="confirmClearHistory = false">Отмена</button>
+                    <button class="font-semibold text-pink-300" @click="clearHistory">Удалить</button>
+                </div>
+            </div>
+            <div class="grid gap-2">
+                <template x-for="entry in conversionHistory" :key="entry.id">
+                    <article class="rounded-2xl bg-[#27272A] p-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-semibold" x-text="`${entry.amount} ${entry.base}`"></p>
+                                <p class="mt-0.5 text-[10px] text-zinc-500" x-text="formatHistoryDate(entry.savedAt)"></p>
+                            </div>
+                            <button class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-zinc-500 active:text-pink-300" @click="removeHistoryEntry(entry.id)" :aria-label="`Удалить запись ${entry.amount} ${entry.base} из истории`">×</button>
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+                            <template x-for="item in entry.rows" :key="`${entry.id}-${item.currency}`">
+                                <span x-show="item.currency !== entry.base" class="rounded-full bg-black/20 px-2.5 py-1 text-[11px] text-zinc-300" x-text="`${formatHistoryResult(item)} ${item.currency}`"></span>
+                            </template>
+                        </div>
+                        <button class="mt-3 w-full rounded-xl border border-white/10 px-3 py-2.5 text-xs font-semibold text-fuchsia-200 transition active:bg-white/5" @click="restoreHistoryEntry(entry)">Вернуть в конвертер</button>
+                    </article>
+                </template>
+            </div>
+        </section>
+    </div>
 
     <div x-show="providerSettingsOpen" x-cloak class="fixed inset-0 z-30 flex items-end bg-black/70" @click.self="providerSettingsOpen = false" @keydown.escape.window="providerSettingsOpen = false">
         <section class="max-h-[82vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#18181B] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="provider-settings-title">

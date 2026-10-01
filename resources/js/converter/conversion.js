@@ -29,6 +29,7 @@ export const conversionMethods = {
         const token = ++this.requestToken;
         this.loading = true; this.message = '';
         this.rows.forEach((row) => { row.loading = true; row.error = ''; });
+        void this.loadDailyChanges(token, targets);
         try {
             const data = await currencyApi.conversions({ from: this.base, fromType: this.currencyType(this.base), targets, refresh });
             if (token !== this.requestToken) return;
@@ -41,9 +42,12 @@ export const conversionMethods = {
                 }
                 const conversion = data.conversions[row.currency];
                 if (conversion?.error) {
-                    row.error = conversion.error;
+                    row.error = this.errorLabel(conversion.error);
                     row.result = '';
                     delete this.factors[row.currency];
+                    if (conversion.message && !this.message.includes(conversion.message)) {
+                        this.message = [this.message, conversion.message].filter(Boolean).join(' ');
+                    }
                     return;
                 }
                 this.factors[row.currency] = conversion.factor;
@@ -68,11 +72,34 @@ export const conversionMethods = {
             }
         }
     },
+    async loadDailyChanges(token, currencies) {
+        const targets = [...new Set(currencies.filter((currency) => currency !== this.base))];
+        this.rows.forEach((row) => {
+            if (targets.includes(row.currency)) row.dailyChange = null;
+        });
+
+        if (!targets.length) return;
+
+        try {
+            const data = await currencyApi.dailyChanges(targets);
+            if (token !== this.requestToken) return;
+
+            this.rows.forEach((row) => {
+                if (Object.hasOwn(data.changes ?? {}, row.currency)) {
+                    row.dailyChange = data.changes[row.currency];
+                }
+            });
+        } catch {
+            // Daily changes are optional market data and must not affect conversion.
+        }
+    },
     async loadRow(row, refresh = false, token = this.requestToken) {
         if (row.currency === this.base) {
             row.result = this.amount;
+            row.dailyChange = null;
             return;
         }
+        void this.loadDailyChanges(token, [row.currency]);
         const pair = `${this.base}:${row.currency}`;
         row.loading = true; row.error = '';
         try {
@@ -83,11 +110,23 @@ export const conversionMethods = {
             this.sources = [...new Set([...this.sources, ...data.sources])];
             this.lastUpdatedAt = data.updatedAt;
             if (data.isStale) this.message = 'Нет сети. Используются сохранённые курсы.';
-        } catch {
-            if (token === this.requestToken && pair === `${this.base}:${row.currency}`) row.error = 'Нет курса';
+        } catch (error) {
+            if (token === this.requestToken && pair === `${this.base}:${row.currency}`) {
+                row.error = this.errorLabel(error.code);
+                this.message = error.message || 'Не удалось получить курс для выбранной валюты.';
+            }
         } finally {
             if (token === this.requestToken) row.loading = false;
         }
+    },
+    errorLabel(code) {
+        return ({
+            provider_rate_limited: 'Лимит API',
+            provider_timeout: 'Таймаут',
+            provider_unavailable: 'Нет связи',
+            unsupported_pair: 'Нет пары',
+            rate_unavailable: 'Нет курса',
+        })[code] || 'Нет курса';
     },
     activateRow(row) {
         if (!row.result || row.error) return;

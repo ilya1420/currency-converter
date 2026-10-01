@@ -20,23 +20,32 @@ export function createConverterState(catalog) {
         init() {
             if (this.initializationPromise) return this.initializationPromise;
 
-            this.initializationPromise = this.loadCatalog().then(() => this.initializeLayout());
-
-            return this.initializationPromise;
+            const cachedCatalog = converterStorage.loadCatalog();
+            if (cachedCatalog.length) this.applyCatalog(cachedCatalog);
+            this.initializeLayout();
+            this.initializationPromise = this.loadCatalog();
         },
         async loadCatalog(strict = false) {
             try {
                 const data = await currencyApi.catalog();
                 if (!Array.isArray(data.currencies)) return;
-                this.catalog = data.currencies; this.currencies = data.currencies.map(({ code }) => code);
-                data.currencies.forEach(({ code, type, name, icon, flag }) => {
-                    this.meta[code] ??= { label: code, color: type === 'crypto' ? cryptoFallbackColor(code) : fiatFallbackColor(code) };
-                    if (name) this.meta[code].name = name; if (icon) this.meta[code].icon = icon; if (flag) this.meta[code].flag = flag;
-                });
+                this.applyCatalog(data.currencies);
+                converterStorage.saveCatalog(data.currencies);
             } catch (error) {
                 if (strict) throw error;
                 // Built-in currencies keep the converter available offline.
             }
+        },
+        applyCatalog(currencies) {
+            this.catalog = currencies;
+            this.currencies = currencies.map(({ code }) => code);
+            currencies.forEach(({ code, type, name, icon, flag }) => {
+                this.meta[code] ??= { label: code, color: type === 'crypto' ? cryptoFallbackColor(code) : fiatFallbackColor(code) };
+                this.meta[code].type = type;
+                if (name) this.meta[code].name = name;
+                if (icon) this.meta[code].icon = icon;
+                if (flag) this.meta[code].flag = flag;
+            });
         },
         initializeLayout() {
             const saved = converterStorage.loadLayout();
@@ -51,11 +60,19 @@ export function createConverterState(catalog) {
                 // A provider can temporarily omit a previously selected asset. Keep the
                 // user's layout and create fallback metadata instead of silently dropping it.
                 currencies.forEach((currency) => {
-                    if (this.meta[currency]) return;
-                    const type = this.catalog.find(({ code }) => code === currency)?.type || 'fiat';
+                    const savedType = saved.rows.find((item) => item.currency === currency)?.type;
+                    const type = this.catalog.find(({ code }) => code === currency)?.type
+                        || savedType
+                        || (this.meta[currency]?.icon ? 'crypto' : 'fiat');
+                    if (this.meta[currency]) {
+                        this.meta[currency].type ??= type;
+                        return;
+                    }
+
                     this.meta[currency] = {
                         label: currency,
                         name: currency,
+                        type,
                         color: type === 'crypto' ? cryptoFallbackColor(currency) : fiatFallbackColor(currency),
                     };
                 });
@@ -83,11 +100,11 @@ export function createConverterState(catalog) {
             if (!this.lastUpdatedAt || !this.sources.length) return '';
             return `Обновлено ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(this.lastUpdatedAt))}`;
         },
-        currencyType(currency) { return this.catalog.find(({ code }) => code === currency)?.type || 'fiat'; },
+        currencyType(currency) { return this.catalog.find(({ code }) => code === currency)?.type || this.meta[currency]?.type || (this.meta[currency]?.icon ? 'crypto' : 'fiat'); },
         fiatFractionDigits(currency) { if (ZERO_DECIMAL.has(currency)) return 0; if (THREE_DECIMAL.has(currency)) return 3; return FOUR_DECIMAL.has(currency) ? 4 : 2; },
         inputFractionDigits() { return this.currencyType(this.base) === 'crypto' ? 6 : this.fiatFractionDigits(this.base); },
         formatAmount(value, currency = this.base) { const crypto = this.currencyType(currency) === 'crypto'; return formatDecimalAmount(value, { fractionDigits: crypto ? 6 : this.fiatFractionDigits(currency), maxFractionDigits: 6, trimTrailingZeros: crypto }); },
         buzz() { if (navigator.vibrate) navigator.vibrate(8); },
-        save() { converterStorage.saveLayout({ base: this.base, keyboardVisible: this.keyboardVisible, rows: this.rows }); },
+        save() { converterStorage.saveLayout({ base: this.base, keyboardVisible: this.keyboardVisible, rows: this.rows.map((item) => ({ ...item, type: this.currencyType(item.currency) })) }); },
     };
 }

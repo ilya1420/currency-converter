@@ -8,6 +8,7 @@ use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\ProviderCapability;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
+use Illuminate\Http\Client\ConnectionException;
 
 final class DailyChangeService
 {
@@ -69,7 +70,7 @@ final class DailyChangeService
 
                 try {
                     $fresh = $provider->dailyChanges($supported);
-                } catch (ProviderException|UnsupportedCurrencyPairException) {
+                } catch (ConnectionException|ProviderException|UnsupportedCurrencyPairException) {
                     foreach ($supported as $currency) {
                         $changes[$currency->code] = null;
                         unset($pending[$currency->code]);

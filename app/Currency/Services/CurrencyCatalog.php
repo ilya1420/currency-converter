@@ -24,7 +24,7 @@ final class CurrencyCatalog
         $selected = $this->selections->configured(ProviderCapability::CATALOG);
         $cryptoProvider = $this->selections->selected(ProviderCapability::CRYPTO_RATES);
         $cryptoCatalogAdapter = $cryptoProvider->adapterFor(ProviderCapability::CATALOG);
-        $cacheKey = 'currency-catalog:v8:'.($selected?->id ?? 'automatic').':crypto-'.$cryptoProvider->id;
+        $cacheKey = 'currency-catalog:v9:'.($selected?->id ?? 'automatic').':crypto-'.$cryptoProvider->id;
 
         return $this->cache()->remember($cacheKey, now()->addMinutes(30), function () use ($selected, $cryptoCatalogAdapter): array {
             // BYN is the application's base currency, not a remote catalog entry.

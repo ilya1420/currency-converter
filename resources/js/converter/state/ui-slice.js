@@ -3,6 +3,9 @@ import { converterStorage } from '../storage.js';
 export function uiSlice() {
     return {
         activeTab: 'converter',
+        historyOpen: false,
+        confirmClearHistory: false,
+        conversionHistory: converterStorage.loadConversionHistory(),
         showFirstRunHint: false,
         providerSettingsOpen: false,
         providerSettings: null,
@@ -19,6 +22,7 @@ export function uiSlice() {
         pickerSwipeOffset: 0,
         ignoreNextRowClick: false,
         cryptoGroups: converterStorage.loadCryptoGroups(),
+        favoritePairs: converterStorage.loadFavoritePairs(),
         keys: ['C', '⌫', '%', '/', '7', '8', '9', '*', '4', '5', '6', '-', '1', '2', '3', '+'],
     };
 }

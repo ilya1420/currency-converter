@@ -13,6 +13,7 @@ use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use DateTimeImmutable;
 use DateTimeZone;
+use Illuminate\Http\Client\ConnectionException;
 
 final class NbrbMarketDataProvider implements DailyChangeProviderInterface, MarketDataProviderInterface
 {
@@ -36,16 +37,24 @@ final class NbrbMarketDataProvider implements DailyChangeProviderInterface, Mark
         }
 
         $client = $this->clients->for('nbrb');
-        $catalog = $client->get('rates', ['periodicity' => 0]);
+        try {
+            $catalog = $client->get('rates', ['periodicity' => 0]);
+        } catch (ConnectionException $exception) {
+            throw new ProviderException('NBRB market data is unavailable.', previous: $exception);
+        }
         $record = collect($catalog->json())->first(fn ($item) => is_array($item) && ($item['Cur_Abbreviation'] ?? null) === $currency->code);
         if ($catalog->failed() || ! is_array($record)) {
             throw new ProviderException('NBRB market data is unavailable.');
         }
 
         $end = new DateTimeImmutable('today');
-        $history = $client->get('rates/dynamics/'.$record['Cur_ID'], [
-            'startdate' => $end->modify("-{$days} days")->format('Y-m-d'), 'enddate' => $end->format('Y-m-d'),
-        ]);
+        try {
+            $history = $client->get('rates/dynamics/'.$record['Cur_ID'], [
+                'startdate' => $end->modify("-{$days} days")->format('Y-m-d'), 'enddate' => $end->format('Y-m-d'),
+            ]);
+        } catch (ConnectionException $exception) {
+            throw new ProviderException('NBRB market data is unavailable.', previous: $exception);
+        }
         if ($history->failed() || ! is_array($history->json())) {
             throw new ProviderException('NBRB market data is unavailable.');
         }

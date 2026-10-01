@@ -33,7 +33,10 @@ class ProviderCapabilitySelectionTest extends TestCase
         Http::fake([
             'https://api.kraken.com/0/public/AssetPairs*' => Http::response([
                 'error' => [],
-                'result' => ['XBTUSD' => ['base' => 'XXBT', 'quote' => 'ZUSD', 'altname' => 'XBTUSD']],
+                'result' => [
+                    'XBTUSD' => ['base' => 'XXBT', 'quote' => 'ZUSD', 'altname' => 'XBTUSD'],
+                    'ZECUSD' => ['base' => 'ZEC', 'quote' => 'USD', 'altname' => 'ZECUSD'],
+                ],
             ]),
             'https://api.nbrb.by/exrates/rates*' => Http::response([]),
             'https://api.coingecko.com/api/v3/coins/markets*' => Http::response([
@@ -45,11 +48,14 @@ class ProviderCapabilitySelectionTest extends TestCase
 
         $catalog = app(CurrencyCatalog::class)->all();
         $bitcoin = collect($catalog)->firstWhere('code', 'BTC');
+        $zcash = collect($catalog)->firstWhere('code', 'ZEC');
 
         $this->assertNotNull($bitcoin);
         $this->assertSame('XBTUSD', $bitcoin->providerSymbol);
         $this->assertSame('bitcoin', $bitcoin->coinGeckoId);
         $this->assertSame('popular', $bitcoin->group);
+        $this->assertNotNull($zcash);
+        $this->assertSame('ZECUSD', $zcash->providerSymbol);
         $this->assertNotContains('ETH', array_map(static fn ($currency): string => $currency->code, $catalog));
         Http::assertSentCount(3);
     }
