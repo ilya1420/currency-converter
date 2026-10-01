@@ -6,12 +6,15 @@ use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Providers\CoinGeckoRateProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 final class CoinGeckoRateProviderTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_it_caches_a_price_response(): void
     {
         Cache::store('file')->forget('coingecko:price:v1:bitcoin');

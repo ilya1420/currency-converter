@@ -9,6 +9,7 @@ export function uiSlice() {
         providerSettingsLoading: false,
         providerSettingsSaving: false,
         providerSettingsError: '',
+        coingeckoApiKey: '',
         isFreshInput: true,
         keyboardVisible: true,
         pickerTarget: null,

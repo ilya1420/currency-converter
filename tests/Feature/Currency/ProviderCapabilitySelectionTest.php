@@ -27,6 +27,7 @@ class ProviderCapabilitySelectionTest extends TestCase
 
     public function test_selected_catalog_controls_list_while_other_catalogs_only_enrich_its_entries(): void
     {
+        config(['currency.coingecko.api_key' => 'test-demo-key']);
         Cache::store('array')->flush();
         Http::preventStrayRequests();
         Http::fake([

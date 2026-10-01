@@ -93,6 +93,7 @@ class RateServiceTest extends TestCase
 
     public function test_explicit_crypto_provider_selection_is_used(): void
     {
+        config(['currency.coingecko.api_key' => 'test-demo-key']);
         Http::preventStrayRequests();
         Http::fake(['https://api.coingecko.com/api/v3/simple/price*' => Http::response(['bitcoin-selection-test' => ['usd' => 68000]], 200)]);
         app(ProviderSelectionService::class)->select(ProviderCapability::CRYPTO_RATES, 'coingecko');
@@ -109,6 +110,7 @@ class RateServiceTest extends TestCase
 
     public function test_automatic_crypto_provider_selection_skips_unsupported_pairs(): void
     {
+        config(['currency.coingecko.api_key' => 'test-demo-key']);
         Http::preventStrayRequests();
         Http::fake(['https://api.coingecko.com/api/v3/simple/price*' => Http::response(['test-coin-auto' => ['usd' => 12.5]], 200)]);
 
@@ -120,6 +122,23 @@ class RateServiceTest extends TestCase
         $this->assertSame(RateSource::COINGECKO, $rate->source);
         $this->assertSame('12.5', $rate->rate);
         Http::assertSentCount(1);
+    }
+
+    public function test_automatic_selection_skips_coingecko_when_its_key_is_not_configured(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake();
+
+        try {
+            app(RateService::class)->getRate(
+                new Currency('TST', CurrencyType::CRYPTO, null, null, 'test-coin-no-key'),
+                Currency::fiat('USD'),
+            );
+
+            $this->fail('No-key CoinGecko must not be called for automatic rate selection.');
+        } catch (RateUnavailableException) {
+            Http::assertNothingSent();
+        }
     }
 
     public function test_selected_provider_failure_does_not_fall_back_to_another_provider(): void

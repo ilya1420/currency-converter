@@ -15,6 +15,7 @@ Route::middleware('throttle:60,1')->group(function (): void {
     Route::get('/daily-changes', DailyChangeController::class)->name('daily-changes');
     Route::get('/market/{currency}', MarketChartController::class)->name('market.chart');
     Route::get('/provider-settings', [ProviderSettingsController::class, 'index'])->name('provider-settings.index');
+    Route::put('/provider-settings/coingecko', [ProviderSettingsController::class, 'saveCoinGeckoKey'])->name('provider-settings.coingecko');
     Route::patch('/provider-settings/{capability}', [ProviderSettingsController::class, 'update'])->name('provider-settings.update');
     Route::delete('/provider-settings/{capability}', [ProviderSettingsController::class, 'destroy'])->name('provider-settings.destroy');
 });

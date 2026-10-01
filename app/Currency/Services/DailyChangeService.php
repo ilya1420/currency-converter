@@ -58,6 +58,10 @@ final class DailyChangeService
             $providers = $configured === null ? $this->providerList() : $this->selectedProvider($configured->adapterFor($capability));
 
             foreach ($providers as $provider) {
+                if ($configured === null && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
+                    continue;
+                }
+
                 $supported = array_values(array_filter($pending, static fn (Currency $currency): bool => $currency->type === $type && $provider->supports($currency)));
                 if ($supported === []) {
                     continue;

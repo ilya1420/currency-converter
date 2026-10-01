@@ -258,14 +258,21 @@
                         <select class="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#18181B] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-400 disabled:opacity-50" :id="`provider-${capability.id}`" :value="providerSettings?.capabilities?.[capability.id]?.selected || '__automatic__'" @change="changeProviderSelection(capability.id, $event.target.value)" :disabled="providerSettingsSaving">
                             <option value="__automatic__" x-text="`Автоматически · ${providerDefaultName(capability.id)} по умолчанию`"></option>
                             <template x-for="provider in providerSettings?.capabilities?.[capability.id]?.providers || []" :key="provider.id">
-                                <option :value="provider.id" x-text="provider.name"></option>
+                                <option :value="provider.id" :disabled="!provider.configured" x-text="provider.configured ? provider.name : `${provider.name} · сначала настройте ключ`"></option>
                             </template>
                         </select>
                         <button class="shrink-0 rounded-xl px-3 py-3 text-xs font-semibold text-fuchsia-300 disabled:opacity-50" @click="resetProviderSelection(capability.id)" :disabled="providerSettingsSaving || !providerSettings?.capabilities?.[capability.id]?.selected">Автоматически</button>
                     </div>
                 </div>
             </template>
-            <p class="mt-4 text-[11px] leading-relaxed text-zinc-600">Ключи API и дополнительные настройки провайдеров пока не поддерживаются.</p>
+            <div class="mt-4 rounded-2xl bg-[#27272A] p-4">
+                <h3 class="mb-1 text-sm font-semibold">CoinGecko Demo API</h3>
+                <p class="mb-3 text-[11px] leading-relaxed text-zinc-500">Ключ проверяется через API CoinGecko и хранится зашифрованным в локальной базе приложения. Он не отображается повторно и не отправляется в URL.</p>
+                <p x-show="providerSettings?.provider_settings?.coingecko?.configured" class="mb-3 text-xs text-emerald-300">Ключ настроен. При необходимости введите новый, чтобы заменить его.</p>
+                <label for="coingecko-api-key" class="mb-2 block text-xs font-semibold text-zinc-300">Demo API key</label>
+                <input id="coingecko-api-key" x-model="coingeckoApiKey" type="password" autocomplete="off" spellcheck="false" class="mb-3 w-full rounded-xl border border-white/10 bg-[#18181B] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-400" placeholder="Вставьте ключ CoinGecko">
+                <button class="w-full rounded-xl bg-fuchsia-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50" @click="saveCoinGeckoKey" :disabled="providerSettingsSaving || !coingeckoApiKey.trim()" x-text="providerSettingsSaving ? 'Проверка…' : 'Проверить и сохранить'"></button>
+            </div>
         </section>
     </div>
 </main>
