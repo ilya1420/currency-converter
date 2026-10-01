@@ -13,6 +13,13 @@ class ProviderCredentialSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['app.key' => 'base64:'.base64_encode(str_repeat('a', 32))]);
+    }
+
     public function test_it_verifies_and_encrypts_a_coingecko_key_without_returning_it(): void
     {
         Http::fake(['api.coingecko.com/*' => Http::response(['gecko_says' => '(V3) To the Moon!'])]);
