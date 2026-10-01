@@ -1,9 +1,19 @@
 import { currencyApi } from './api.js';
 
 export const providerSettingsMethods = {
+    get capabilityLabels() {
+        return {
+            catalog: 'Каталог валют',
+            fiat_rates: 'Курсы обычных валют',
+            crypto_rates: 'Курсы криптовалют',
+            fiat_daily_changes: 'Изменения обычных валют',
+            crypto_daily_changes: 'Изменения криптовалют',
+            fiat_market_data: 'Графики обычных валют',
+            crypto_market_data: 'Графики криптовалют',
+        };
+    },
     get providerCapabilities() {
         return [
-            { id: 'catalog', label: 'Список валют' },
             { id: 'fiat_rates', label: 'Курсы обычных валют' },
             { id: 'crypto_rates', label: 'Курсы криптовалют' },
             { id: 'fiat_daily_changes', label: 'Изменения обычных валют' },
@@ -11,6 +21,9 @@ export const providerSettingsMethods = {
             { id: 'fiat_market_data', label: 'Графики обычных валют' },
             { id: 'crypto_market_data', label: 'Графики криптовалют' },
         ];
+    },
+    providerCapabilityLabels(provider) {
+        return (provider.capabilities || []).map((capability) => this.capabilityLabels[capability] || capability);
     },
     providerDefaultName(capabilityId) {
         const capability = this.providerSettings?.capabilities?.[capabilityId];
@@ -97,7 +110,7 @@ export const providerSettingsMethods = {
         }
     },
     async refreshAfterProviderSelection(capability) {
-        if (capability === 'catalog') await this.loadCatalog(true);
+        if (capability === 'crypto_rates') await this.loadCatalog(true);
         await this.loadAll(true);
         if (capability.endsWith('_market_data') && this.activeTab === 'charts') await this.loadChart();
     },

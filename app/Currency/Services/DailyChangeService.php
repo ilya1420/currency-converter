@@ -84,8 +84,10 @@ final class DailyChangeService
                     if ($change !== null) {
                         $selectionId = $configured?->id ?? 'automatic';
                         $this->cache->put($this->cacheKey($currency, $selectionId), $change, $this->ttl($currency));
+                        unset($pending[$currency->code]);
+                    } elseif ($configured !== null) {
+                        unset($pending[$currency->code]);
                     }
-                    unset($pending[$currency->code]);
                 }
             }
         }

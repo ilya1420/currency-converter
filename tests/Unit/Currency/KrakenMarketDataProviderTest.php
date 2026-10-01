@@ -10,6 +10,31 @@ use Tests\TestCase;
 
 class KrakenMarketDataProviderTest extends TestCase
 {
+    public function test_it_supports_only_crypto_with_a_kraken_usd_pair(): void
+    {
+        $provider = new KrakenMarketDataProvider(new KrakenAssetMapper);
+
+        $this->assertTrue($provider->supports(Currency::crypto('ZEC', 'ZECUSD')));
+        $this->assertFalse($provider->supports(Currency::crypto('ZEC')));
+        $this->assertFalse($provider->supports(Currency::fiat('USD')));
+    }
+
+    public function test_it_reads_daily_change_from_kraken_internal_pair_symbols(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.kraken.com/0/public/Ticker*' => Http::response([
+                'error' => [],
+                'result' => ['XZECZUSD' => ['c' => ['110'], 'o' => '100']],
+            ]),
+        ]);
+
+        $provider = new KrakenMarketDataProvider(new KrakenAssetMapper);
+        $changes = $provider->dailyChanges([Currency::crypto('ZEC', 'ZECUSD')]);
+
+        $this->assertSame(10.0, round($changes['ZEC'], 1));
+    }
+
     public function test_it_returns_normalized_chart_data_from_three_kraken_endpoints(): void
     {
         Http::fake([

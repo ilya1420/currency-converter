@@ -32,7 +32,6 @@ $providerDefinitions = [
     ],
     'coingecko' => [
         'name' => 'CoinGecko',
-        'requires_api_key' => true,
         'adapters' => [
             'catalog' => CoinGeckoCurrencyCatalogProvider::class,
             'crypto_rates' => CoinGeckoRateProvider::class,

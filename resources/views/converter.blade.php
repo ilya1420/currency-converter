@@ -237,6 +237,18 @@
                     </div>
                 </div>
             </template>
+            <div x-show="unavailableCurrencies.length && filteredCurrencies(unavailableCurrencies).length" class="mb-5">
+                <p class="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">Недоступны у выбранного источника</p>
+                <div class="overflow-hidden rounded-2xl bg-[#27272A]">
+                    <template x-for="currency in filteredCurrencies(unavailableCurrencies)" :key="`unavailable-${currency}`">
+                        <button class="flex w-full items-center gap-3 border-b border-white/5 px-4 py-3.5 text-left opacity-45 last:border-0" disabled>
+                            <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/5 text-xs font-black text-zinc-400" x-text="badgeText(currency)"></span>
+                            <span class="min-w-0 flex-1"><span class="block truncate font-semibold text-zinc-300" x-text="currencyInfo(currency).label || currency"></span><span class="block truncate text-[11px] text-zinc-500" x-text="currencyName(currency)"></span></span>
+                            <span class="text-[10px] text-amber-300">Недоступна</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
         </section>
     </div>
     </template>
@@ -252,7 +264,7 @@
             <p x-show="providerSettingsLoading" class="py-5 text-center text-sm text-zinc-500">Загрузка настроек…</p>
             <p x-show="providerSettingsError" x-cloak class="mb-3 text-sm text-pink-300" role="alert" x-text="providerSettingsError"></p>
             <template x-for="capability in providerCapabilities" :key="capability.id">
-                <div x-show="providerSettings?.capabilities?.[capability.id]" class="mb-3 rounded-2xl bg-[#27272A] p-4">
+                <div x-show="providerSettings?.capabilities?.[capability.id]?.providers?.length" class="mb-3 rounded-2xl bg-[#27272A] p-4">
                     <label class="mb-2 block text-xs font-semibold text-zinc-300" :for="`provider-${capability.id}`" x-text="capability.label"></label>
                     <div class="flex items-center gap-2">
                         <select class="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#18181B] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-400 disabled:opacity-50" :id="`provider-${capability.id}`" :value="providerSettings?.capabilities?.[capability.id]?.selected || '__automatic__'" @change="changeProviderSelection(capability.id, $event.target.value)" :disabled="providerSettingsSaving">
@@ -265,6 +277,24 @@
                     </div>
                 </div>
             </template>
+            <div class="mt-5">
+                <h3 class="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Встроенные провайдеры и их возможности</h3>
+                <div class="grid gap-2">
+                    <template x-for="provider in providerSettings?.providers || []" :key="`provider-info-${provider.id}`">
+                        <article class="rounded-2xl bg-[#27272A] p-4">
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <h4 class="text-sm font-semibold text-white" x-text="provider.name"></h4>
+                                <span x-show="provider.requires_api_key" class="text-[10px]" :class="provider.configured ? 'text-emerald-300' : 'text-amber-300'" x-text="provider.configured ? 'Ключ настроен' : 'Нужен ключ'"></span>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <template x-for="label in providerCapabilityLabels(provider)" :key="`${provider.id}-${label}`">
+                                    <span class="rounded-full bg-white/5 px-2.5 py-1 text-[10px] text-zinc-300" x-text="label"></span>
+                                </template>
+                            </div>
+                        </article>
+                    </template>
+                </div>
+            </div>
             <div class="mt-4 rounded-2xl bg-[#27272A] p-4">
                 <h3 class="mb-1 text-sm font-semibold">CoinGecko Demo API</h3>
                 <p class="mb-3 text-[11px] leading-relaxed text-zinc-500">Ключ проверяется через API CoinGecko и хранится зашифрованным в локальной базе приложения. Он не отображается повторно и не отправляется в URL.</p>

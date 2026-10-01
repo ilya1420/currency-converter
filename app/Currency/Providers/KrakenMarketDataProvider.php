@@ -22,7 +22,17 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
     /** @return array{candles: list<array{time: int, open: string, high: string, low: string, close: string}>, ticker: array{last: string, open: string, high: string, low: string, volume: string, trades: int}, depth: array{bids: list<array>, asks: list<array>}} */
     public function supports(Currency $currency): bool
     {
-        return $currency->type === CurrencyType::CRYPTO;
+        if ($currency->type !== CurrencyType::CRYPTO) {
+            return false;
+        }
+
+        try {
+            $this->mapper->usdPair($currency);
+        } catch (UnsupportedCurrencyPairException) {
+            return false;
+        }
+
+        return true;
     }
 
     public function chart(Currency $currency, int $interval): array
@@ -135,6 +145,30 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
 
     private function normalizedPair(string $pair): string
     {
-        return str_replace('XBT', 'BTC', preg_replace('/[^A-Z0-9]/', '', strtoupper($pair)) ?? '');
+        $pair = preg_replace('/[^A-Z0-9]/', '', strtoupper($pair)) ?? '';
+        $quotes = ['ZUSD' => 'USD', 'ZEUR' => 'EUR', 'ZGBP' => 'GBP', 'ZCAD' => 'CAD', 'ZAUD' => 'AUD', 'ZJPY' => 'JPY', 'ZCHF' => 'CHF'];
+        foreach ($quotes as $krakenQuote => $quote) {
+            if (str_ends_with($pair, $krakenQuote)) {
+                $pair = substr($pair, 0, -strlen($krakenQuote)).$quote;
+                break;
+            }
+        }
+
+        foreach (['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF'] as $quote) {
+            if (! str_ends_with($pair, $quote)) {
+                continue;
+            }
+
+            $base = substr($pair, 0, -strlen($quote));
+            if (str_starts_with($base, 'XX') || (str_starts_with($base, 'X') && strlen($base) === 4)) {
+                $base = substr($base, 1);
+            }
+
+            $base = str_replace(['XBT', 'XDG'], ['BTC', 'DOGE'], $base);
+
+            return $base.$quote;
+        }
+
+        return str_replace(['XBT', 'XDG'], ['BTC', 'DOGE'], $pair);
     }
 }
