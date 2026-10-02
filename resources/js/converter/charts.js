@@ -150,10 +150,16 @@ export const chartMethods = {
         return { change: this.chartChange, observations: candles.length, updated: new Date(candles.at(-1).time * 1000) };
     },
     async loadChart() {
+        const token = ++this.chartRequestToken;
+        this.chart = null;
         this.chartLoading = true; this.chartError = '';
         try {
-            this.chart = await currencyApi.market(this.chartCurrency, this.chartInterval, this.currencyType(this.chartCurrency));
-        } catch { this.chartError = 'Не удалось загрузить данные рынка.'; }
-        finally { this.chartLoading = false; }
+            const chart = await currencyApi.market(this.chartCurrency, this.chartInterval, this.currencyType(this.chartCurrency));
+            if (token === this.chartRequestToken) this.chart = chart;
+        } catch {
+            if (token === this.chartRequestToken) this.chartError = 'Не удалось загрузить данные рынка.';
+        } finally {
+            if (token === this.chartRequestToken) this.chartLoading = false;
+        }
     },
 };

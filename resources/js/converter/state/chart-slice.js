@@ -7,5 +7,6 @@ export function chartSlice() {
         chart: null,
         chartLoading: false,
         chartError: '',
+        chartRequestToken: 0,
     };
 }

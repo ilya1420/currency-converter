@@ -3,6 +3,7 @@ const CRYPTO_GROUPS_KEY = 'currency-converter-crypto-groups';
 const FIRST_RUN_HINT_KEY = 'currency-converter-first-run-hint-seen';
 const FAVORITE_PAIRS_KEY = 'currency-converter-favorite-pairs';
 const CONVERSION_HISTORY_KEY = 'currency-converter-history';
+const CURRENCY_CATALOG_KEY = 'currency-converter-catalog';
 const HISTORY_LIMIT = 50;
 
 function read(key, fallback) {
@@ -47,7 +48,33 @@ function sanitizeHistoryEntry(entry) {
     };
 }
 
+function sanitizeCatalog(currencies) {
+    if (!Array.isArray(currencies)) return [];
+
+    return currencies.filter((currency) => currency
+        && validCurrencyCode(currency.code)
+        && ['fiat', 'crypto'].includes(currency.type))
+        .map(({ code, type, providerSymbol, name, group, icon, flag, coinGeckoId }) => ({
+            code,
+            type,
+            providerSymbol: typeof providerSymbol === 'string' ? providerSymbol : null,
+            name: typeof name === 'string' ? name : null,
+            group: typeof group === 'string' ? group : null,
+            icon: typeof icon === 'string' && /^\/images\/currencies\/[a-z0-9$]+\.svg$/.test(icon) ? icon : null,
+            flag: typeof flag === 'string' && /^\/images\/flags\/[a-z0-9-]+\.svg$/.test(flag) ? flag : null,
+            coinGeckoId: typeof coinGeckoId === 'string' ? coinGeckoId : null,
+        }));
+}
+
 export const converterStorage = {
+    loadCatalog() {
+        return sanitizeCatalog(read(CURRENCY_CATALOG_KEY, []));
+    },
+    saveCatalog(currencies) {
+        try {
+            localStorage.setItem(CURRENCY_CATALOG_KEY, JSON.stringify(sanitizeCatalog(currencies)));
+        } catch {}
+    },
     loadLayout() {
         return read(LAYOUT_KEY, null);
     },
@@ -55,7 +82,7 @@ export const converterStorage = {
         localStorage.setItem(LAYOUT_KEY, JSON.stringify({
             activeCurrency: base,
             keyboardVisible,
-            rows: rows.map(({ currency }) => ({ currency })),
+            rows: rows.map(({ currency, type }) => ({ currency, type: type === 'crypto' ? 'crypto' : 'fiat' })),
         }));
     },
     hasSeenFirstRunHint() {

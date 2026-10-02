@@ -22,12 +22,14 @@ function conversionState() {
 test('concurrent conversion loads are coalesced into one request', async () => {
     let requests = 0;
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => {
+    globalThis.fetch = async (url) => {
+        if (String(url).startsWith('/daily-changes')) {
+            return new Response(JSON.stringify({ changes: { EUR: -0.3 } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         requests++;
         await new Promise((resolve) => setTimeout(resolve, 5));
         return new Response(JSON.stringify({
             conversions: { EUR: { factor: '0.92', sources: ['test'], updatedAt: '2026-09-28T00:00:00Z', isStale: false } },
-            changes: { USD: 1.2, EUR: -0.3 },
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
 
@@ -43,13 +45,17 @@ test('concurrent conversion loads are coalesced into one request', async () => {
 
 test('partial failure marks the unavailable row while preserving stale rates and metadata', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => new Response(JSON.stringify({
-        conversions: {
-            EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: true },
-            BYN: { error: 'Нет курса' },
-        },
-        changes: {},
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    globalThis.fetch = async (url) => {
+        if (String(url).startsWith('/daily-changes')) {
+            return new Response(JSON.stringify({ changes: { EUR: -0.3 } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({
+            conversions: {
+                EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: true },
+                BYN: { error: 'provider_rate_limited', message: 'Kraken временно ограничил запросы.', provider: 'kraken' },
+            },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
 
     try {
         const state = conversionState();
@@ -60,12 +66,13 @@ test('partial failure marks the unavailable row while preserving stale rates and
         await state.loadAll();
 
         assert.equal(state.rows[1].result, '92');
-        assert.equal(failedRow.error, 'Нет курса');
+        assert.equal(failedRow.error, 'Лимит API');
+        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы. Kraken временно ограничил запросы.');
         assert.equal(failedRow.result, '');
         assert.equal(state.factors.BYN, undefined);
         assert.deepEqual(state.sources, ['nbrb']);
         assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
-        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы.');
+        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы. Kraken временно ограничил запросы.');
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -87,6 +94,34 @@ test('request failure preserves displayed values and their source metadata', asy
         assert.deepEqual(state.sources, ['nbrb']);
         assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
         assert.equal(state.message, 'Не удалось обновить курс. Показаны последние значения.');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('daily changes load separately and do not block conversion results', async () => {
+    const originalFetch = globalThis.fetch;
+    let finishDailyChanges;
+    globalThis.fetch = async (url) => {
+        if (String(url).startsWith('/daily-changes')) {
+            return new Promise((resolve) => { finishDailyChanges = resolve; });
+        }
+
+        return new Response(JSON.stringify({
+            conversions: { EUR: { factor: '0.92', sources: ['nbrb'], updatedAt: '2026-09-28T00:00:00Z', isStale: false } },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const state = conversionState();
+        await state.loadAll();
+
+        assert.equal(state.rows[1].result, '92');
+        assert.equal(state.rows[1].dailyChange, null);
+        finishDailyChanges(new Response(JSON.stringify({ changes: { EUR: -0.3 } }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        assert.equal(state.rows[1].dailyChange, -0.3);
     } finally {
         globalThis.fetch = originalFetch;
     }

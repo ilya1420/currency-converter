@@ -51,7 +51,7 @@ final class RateService
 
             if (! $provider->supports($from, $to)) {
                 if ($configuredProvider !== null) {
-                    throw new RateUnavailableException("Selected provider [{$configuredProvider->id}] does not support {$from->code}/{$to->code}.");
+                    throw new RateUnavailableException("Selected provider [{$configuredProvider->id}] does not support {$from->code}/{$to->code}.", $configuredProvider->id, 'unsupported_pair');
                 }
 
                 continue;
@@ -68,7 +68,7 @@ final class RateService
                     return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
                 }
 
-                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", previous: $this->providerFailures[$provider::class]);
+                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", $source->value, previous: $this->providerFailures[$provider::class]);
             }
 
             try {
@@ -80,7 +80,7 @@ final class RateService
                     return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
                 }
 
-                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", previous: $exception);
+                throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", $source->value, previous: $exception);
             }
         }
         throw new RateUnavailableException("No rate is available for {$from->code}/{$to->code}.");

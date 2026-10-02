@@ -9,6 +9,7 @@ use App\Currency\Enums\CurrencyType;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ExternalApiClientFactory;
+use Illuminate\Http\Client\ConnectionException;
 
 final class KrakenMarketDataProvider implements DailyChangeProviderInterface, MarketDataProviderInterface
 {
@@ -118,7 +119,11 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
     /** @return array<string, mixed> */
     private function request(string $endpoint, array $params): array
     {
-        $response = ($this->clients ??= app(ExternalApiClientFactory::class))->for('kraken')->get($endpoint, $params);
+        try {
+            $response = ($this->clients ??= app(ExternalApiClientFactory::class))->for('kraken')->get($endpoint, $params);
+        } catch (ConnectionException $exception) {
+            throw new ProviderException('Kraken market data is unavailable.', previous: $exception);
+        }
 
         if ($response->failed() || $response->json('error') !== []) {
             throw new ProviderException('Kraken market data is unavailable.');

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { createConverterState } from '../../resources/js/converter/state.js';
 import { converterStorage } from '../../resources/js/converter/storage.js';
+import { currencyApi } from '../../resources/js/converter/api.js';
 
 test('layout restoration keeps saved currencies even when catalog is incomplete', () => {
     const values = new Map([
@@ -26,6 +27,48 @@ test('layout restoration keeps saved currencies even when catalog is incomplete'
         assert.equal(state.base, 'BTC');
         assert.equal(state.meta.BONK.label, 'BONK');
     } finally {
+        globalThis.localStorage = previousStorage;
+    }
+});
+
+test('startup restores the cached catalog and layout before the remote catalog responds', async () => {
+    const cachedCatalog = [
+        { code: 'BTC', type: 'crypto', name: 'Bitcoin', group: 'popular', icon: '/images/currencies/btc.svg' },
+        { code: 'ZEC', type: 'crypto', name: 'Zcash', group: 'other' },
+    ];
+    const values = new Map([
+        ['currency-converter-layout', JSON.stringify({ activeCurrency: 'ZEC', rows: [{ currency: 'ZEC' }, { currency: 'USD' }] })],
+        ['currency-converter-catalog', JSON.stringify(cachedCatalog)],
+    ]);
+    const previousStorage = globalThis.localStorage;
+    const previousCatalogRequest = currencyApi.catalog;
+    globalThis.localStorage = {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+    };
+    let resolveCatalog;
+    currencyApi.catalog = () => new Promise((resolve) => { resolveCatalog = resolve; });
+
+    try {
+        const state = createConverterState([]);
+        let conversionLoads = 0;
+        state.loadAll = () => { conversionLoads++; };
+
+        const initializationResult = state.init();
+
+        assert.equal(initializationResult, undefined);
+        assert.deepEqual(state.rows.map(({ currency }) => currency), ['ZEC', 'USD']);
+        assert.equal(state.currencyType('ZEC'), 'crypto');
+        assert.equal(conversionLoads, 1);
+        assert.equal(state.currencies.includes('BTC'), true);
+
+        resolveCatalog({ currencies: [...cachedCatalog, { code: 'ETH', type: 'crypto', name: 'Ethereum' }] });
+        await state.initializationPromise;
+
+        assert.equal(state.currencies.includes('ETH'), true);
+        assert.equal(JSON.parse(values.get('currency-converter-catalog')).some(({ code }) => code === 'ETH'), true);
+    } finally {
+        currencyApi.catalog = previousCatalogRequest;
         globalThis.localStorage = previousStorage;
     }
 });

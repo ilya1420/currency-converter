@@ -4,7 +4,14 @@ async function request(url, options = {}) {
     const response = await fetch(url, options);
     const payload = await response.json();
 
-    if (!response.ok) throw new Error(payload.message || 'Request failed');
+    if (!response.ok) {
+        const error = new Error(payload.message || 'Request failed');
+        error.code = payload.code;
+        error.provider = payload.provider;
+        error.retryAfter = payload.retryAfter;
+        error.status = response.status;
+        throw error;
+    }
 
     return payload;
 }
@@ -18,6 +25,12 @@ export const currencyApi = {
             method: 'POST', headers: JSON_HEADERS,
             body: JSON.stringify({ from, fromType, targets, refresh }),
         });
+    },
+    dailyChanges(currencies) {
+        const query = new URLSearchParams();
+        currencies.forEach((currency) => query.append('currencies[]', currency));
+
+        return request(`/daily-changes?${query.toString()}`);
     },
     conversion({ from, fromType, to, toType, refresh }) {
         return request('/conversion', {

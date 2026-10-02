@@ -7,13 +7,14 @@ use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ConversionService;
 use App\Currency\Services\CurrencyCatalog;
+use App\Http\Presenters\ConversionFailurePresenter;
 use App\Http\Presenters\ConversionPresenter;
 use App\Http\Requests\BatchConvertCurrenciesRequest;
 use Illuminate\Http\JsonResponse;
 
 final class BatchConversionController
 {
-    public function __invoke(BatchConvertCurrenciesRequest $request, ConversionService $converter, CurrencyCatalog $catalog, ConversionPresenter $presenter): JsonResponse
+    public function __invoke(BatchConvertCurrenciesRequest $request, ConversionService $converter, CurrencyCatalog $catalog, ConversionPresenter $presenter, ConversionFailurePresenter $failurePresenter): JsonResponse
     {
         $data = $request->validated();
 
@@ -25,8 +26,9 @@ final class BatchConversionController
             try {
                 $result = $converter->convert('1', $from, $catalog->resolve($target), $refresh);
                 $conversions[$target] = $presenter->factor($result);
-            } catch (RateUnavailableException|ProviderException|UnsupportedCurrencyPairException) {
-                $conversions[$target] = ['error' => 'Нет курса'];
+            } catch (RateUnavailableException|ProviderException|UnsupportedCurrencyPairException $exception) {
+                $failure = $failurePresenter->present($exception);
+                $conversions[$target] = [...$failure, 'error' => $failure['code']];
             }
         }
 

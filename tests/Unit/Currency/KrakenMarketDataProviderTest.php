@@ -3,8 +3,10 @@
 namespace Tests\Unit\Currency;
 
 use App\Currency\Enums\Currency;
+use App\Currency\Exceptions\ProviderException;
 use App\Currency\Providers\KrakenAssetMapper;
 use App\Currency\Providers\KrakenMarketDataProvider;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -62,5 +64,17 @@ class KrakenMarketDataProviderTest extends TestCase
         $this->assertSame('65400', $chart['ticker']['last']);
         $this->assertSame([['65390', '1']], $chart['depth']['bids']);
         Http::assertSentCount(3);
+    }
+
+    public function test_it_converts_chart_connection_failures_to_provider_exceptions(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(static fn (): never => throw new ConnectionException('offline'));
+
+        $provider = new KrakenMarketDataProvider(new KrakenAssetMapper);
+
+        $this->expectException(ProviderException::class);
+
+        $provider->chart(Currency::crypto('BTC', 'XBTUSD'), 60);
     }
 }
