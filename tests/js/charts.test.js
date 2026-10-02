@@ -60,6 +60,30 @@ test('failed chart reload hides the previous selection and reports an error', as
     }
 });
 
+test('chart markup ignores malformed candles and normalizes numeric values before SVG generation', () => {
+    const state = chartState();
+    state.chart = {
+        candles: [
+            { time: 1_700_000_000, open: '10', high: '12', low: '9', close: '11' },
+            { time: 1_700_003_600, open: '10\" onload=\"alert(1)', high: '12', low: '9', close: '11' },
+            { time: 1_700_007_200, open: '1e999', high: '1e999', low: '1', close: '2' },
+            { time: 1_700_010_800, open: '10', high: '9', low: '8', close: '11' },
+            null,
+        ],
+    };
+
+    assert.deepEqual(state.visibleChartCandles, [{
+        time: 1_700_000_000,
+        open: 10,
+        high: 12,
+        low: 9,
+        close: 11,
+    }]);
+    assert.equal(state.chartCandlesMarkup.includes('onload'), false);
+    assert.equal(state.chartCandlesMarkup.includes('NaN'), false);
+    assert.equal(state.chartCandlesMarkup.includes('Infinity'), false);
+});
+
 test('an obsolete chart failure does not replace the current request state', async () => {
     const originalMarket = currencyApi.market;
     const pending = new Map();

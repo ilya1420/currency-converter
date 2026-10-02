@@ -77,4 +77,34 @@ class KrakenMarketDataProviderTest extends TestCase
 
         $provider->chart(Currency::crypto('BTC', 'XBTUSD'), 60);
     }
+
+    public function test_it_discards_malformed_ohlc_values_before_returning_chart_data(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.kraken.com/0/public/OHLC*' => Http::response([
+                'error' => [],
+                'result' => ['XBT/USD' => [
+                    [1_700_000_000, '10', '12', '9', '11'],
+                    [1_700_003_600, '10" onload="alert(1)', '12', '9', '11'],
+                    [1_700_007_200, '1e999', '1e999', '1', '2'],
+                    [1_700_010_800, '10', '9', '8', '11'],
+                    [1_700_014_400, '11', '13', '10', '12'],
+                ]],
+            ]),
+            'https://api.kraken.com/0/public/Ticker*' => Http::response([
+                'error' => [], 'result' => ['XBT/USD' => ['c' => ['12'], 'o' => '11']],
+            ]),
+            'https://api.kraken.com/0/public/Depth*' => Http::response([
+                'error' => [], 'result' => ['XBT/USD' => ['bids' => [], 'asks' => []]],
+            ]),
+        ]);
+
+        $chart = (new KrakenMarketDataProvider(new KrakenAssetMapper))
+            ->chart(Currency::crypto('BTC', 'XBTUSD'), 60);
+
+        $this->assertSame([
+            ['time' => 1_700_000_000, 'open' => '10', 'high' => '12', 'low' => '9', 'close' => '11'],
+        ], $chart['candles']);
+    }
 }

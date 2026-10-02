@@ -38,7 +38,31 @@ export const chartMethods = {
         this.chartInterval = this.isFiatCurrency(currency) ? 30 : 60;
         await this.loadChart();
     },
-    get visibleChartCandles() { return (this.chart?.candles || []).slice(-60); },
+    get visibleChartCandles() {
+        if (!Array.isArray(this.chart?.candles)) return [];
+
+        return this.chart.candles.flatMap((candle) => {
+            if (!candle || typeof candle !== 'object') return [];
+
+            const normalized = {
+                time: Number(candle.time),
+                open: Number(candle.open),
+                high: Number(candle.high),
+                low: Number(candle.low),
+                close: Number(candle.close),
+            };
+            const prices = [normalized.open, normalized.high, normalized.low, normalized.close];
+
+            if (!Number.isSafeInteger(normalized.time) || normalized.time <= 0
+                || prices.some((price) => !Number.isFinite(price) || price <= 0)
+                || normalized.high < Math.max(normalized.open, normalized.close, normalized.low)
+                || normalized.low > Math.min(normalized.open, normalized.close)) {
+                return [];
+            }
+
+            return [normalized];
+        }).slice(-60);
+    },
     get chartCandles() {
         const candles = this.visibleChartCandles;
         if (!candles.length) return [];

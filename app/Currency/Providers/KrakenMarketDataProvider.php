@@ -47,9 +47,7 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         $ohlc = $this->first($this->request('OHLC', $params + ['interval' => $interval]));
         $ticker = $this->first($this->request('Ticker', $params));
         $depth = $this->first($this->request('Depth', $params + ['count' => 10]));
-        $candles = array_values(array_filter($ohlc, static fn (mixed $candle): bool => is_array($candle)
-            && isset($candle[0], $candle[1], $candle[2], $candle[3], $candle[4])
-            && is_numeric($candle[0]) && is_numeric($candle[1]) && is_numeric($candle[2]) && is_numeric($candle[3]) && is_numeric($candle[4])));
+        $candles = array_values(array_filter($ohlc, $this->isValidCandle(...)));
         usort($candles, static fn (array $left, array $right): int => (int) $left[0] <=> (int) $right[0]);
 
         array_pop($candles); // Kraken always includes the unfinished current candle.
@@ -146,6 +144,32 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         }
 
         return $value;
+    }
+
+    private function isValidCandle(mixed $candle): bool
+    {
+        if (! is_array($candle) || ! isset($candle[0], $candle[1], $candle[2], $candle[3], $candle[4])) {
+            return false;
+        }
+
+        if (! is_numeric($candle[0])) {
+            return false;
+        }
+
+        $time = (float) $candle[0];
+        $prices = array_map(static fn (mixed $price): float => is_numeric($price) ? (float) $price : NAN, array_slice($candle, 1, 4));
+
+        if (! is_finite($time) || $time <= 0 || floor($time) !== $time || $time > PHP_INT_MAX) {
+            return false;
+        }
+
+        if (count($prices) !== 4 || array_filter($prices, static fn (float $price): bool => ! is_finite($price) || $price <= 0) !== []) {
+            return false;
+        }
+
+        [$open, $high, $low, $close] = $prices;
+
+        return $high >= max($open, $close, $low) && $low <= min($open, $close);
     }
 
     private function normalizedPair(string $pair): string
