@@ -101,6 +101,7 @@
                     class="flex w-full items-center justify-center gap-2 border-b border-white/5 py-3 text-sm font-semibold text-fuchsia-300 active:text-pink-300"
                     @click="openPicker('add')"><span class="text-xl leading-none">+</span> Добавить валюту
                 </button>
+                <button class="flex w-full items-center justify-center border-b border-white/5 py-3 text-xs font-semibold text-zinc-400 active:text-fuchsia-300" @click="presetsOpen = true">Наборы валют</button>
             </div>
             <button
                 x-show="!keyboardVisible"
@@ -269,6 +270,33 @@
         </section>
     </div>
     </template>
+
+    <div x-show="presetsOpen" x-cloak class="fixed inset-0 z-30 flex items-end bg-black/70" @click.self="presetsOpen = false" @keydown.escape.window="presetsOpen = false">
+        <section class="max-h-[82vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#18181B] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="currency-presets-title">
+            <div class="mb-4 flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h2 id="currency-presets-title" class="text-lg font-bold">Наборы валют</h2>
+                    <p class="mt-1 text-xs leading-relaxed text-zinc-400">Добавьте валюты к текущим строкам. Сумма и базовая валюта сохранятся.</p>
+                </div>
+                <button class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/5 text-zinc-400" @click="presetsOpen = false" aria-label="Закрыть наборы валют">×</button>
+            </div>
+            <div class="grid gap-3">
+                <template x-for="preset in currencyPresets" :key="preset.id">
+                    <article class="rounded-2xl bg-[#27272A] p-4">
+                        <h3 class="text-sm font-semibold" x-text="preset.label"></h3>
+                        <p class="mt-1 text-xs text-zinc-400" x-text="preset.description"></p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <template x-for="currency in preset.currencies" :key="currency">
+                                <span class="rounded-full bg-black/20 px-2.5 py-1 text-xs" :class="preset.unavailable.includes(currency) ? 'text-zinc-500 line-through' : 'text-zinc-200'" x-text="currency"></span>
+                            </template>
+                        </div>
+                        <p x-show="preset.unavailable.length" class="mt-2 text-xs text-zinc-400" x-text="`Недоступны у текущих источников: ${preset.unavailable.join(', ')}. Они не будут добавлены.`"></p>
+                        <button class="mt-3 min-h-11 w-full rounded-xl bg-fuchsia-500 px-3 py-2.5 text-xs font-semibold text-white transition active:bg-fuchsia-400 disabled:opacity-40" @click="applyCurrencyPreset(preset.id)" :disabled="!preset.additions.length" x-text="preset.additions.length ? `Добавить валюты (${preset.additions.length})` : (preset.available.length ? 'Доступные валюты уже добавлены' : 'Нет доступных валют')"></button>
+                    </article>
+                </template>
+            </div>
+        </section>
+    </div>
 
     <div x-show="historyOpen" x-cloak class="fixed inset-0 z-30 flex items-end bg-black/70" @click.self="historyOpen = false" @keydown.escape.window="historyOpen = false">
         <section class="max-h-[82vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#18181B] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="conversion-history-title">

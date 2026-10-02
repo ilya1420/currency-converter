@@ -4,6 +4,7 @@ export function uiSlice() {
     return {
         activeTab: 'converter',
         historyOpen: false,
+        presetsOpen: false,
         confirmClearHistory: false,
         conversionHistory: converterStorage.loadConversionHistory(),
         showFirstRunHint: false,

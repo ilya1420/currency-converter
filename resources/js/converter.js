@@ -4,6 +4,7 @@ import { conversionMethods } from './converter/conversion.js';
 import { currencyListMethods } from './converter/currency-list.js';
 import { gestureMethods } from './converter/gestures.js';
 import { historyMethods } from './converter/history.js';
+import { presetMethods } from './converter/presets.js';
 import { providerSettingsMethods } from './converter/settings.js';
 import { createConverterState } from './converter/state.js';
 
@@ -19,5 +20,6 @@ window.converter = (catalog) => [
     currencyListMethods,
     gestureMethods,
     historyMethods,
+    presetMethods,
     providerSettingsMethods,
 ].reduce(attachMethods, createConverterState(catalog));
