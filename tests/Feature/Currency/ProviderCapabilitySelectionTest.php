@@ -8,6 +8,7 @@ use App\Currency\DTO\CurrencyDefinition;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\ProviderCapability;
+use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Providers\CoinGeckoDailyChangeProvider;
 use App\Currency\Providers\KrakenAssetMapper;
 use App\Currency\Providers\KrakenMarketDataProvider;
@@ -25,6 +26,19 @@ use Tests\TestCase;
 class ProviderCapabilitySelectionTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_automatic_charts_do_not_call_a_provider_with_a_missing_required_key(): void
+    {
+        config(['currency.providers.registry.kraken.requires_api_key' => true]);
+        Http::preventStrayRequests();
+
+        try {
+            app(MarketChartService::class)->chart(Currency::crypto('BTC', 'XBTUSD'), 60);
+            $this->fail('A provider with a missing required key must not be called.');
+        } catch (UnsupportedCurrencyPairException) {
+            Http::assertNothingSent();
+        }
+    }
 
     public function test_crypto_catalog_uses_the_selected_crypto_rate_provider(): void
     {

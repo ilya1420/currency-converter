@@ -18,7 +18,13 @@ final class BatchConversionController
     {
         $data = $request->validated();
 
-        $from = $catalog->resolve($data['from'], $data['fromType'] ?? null);
+        try {
+            $from = $catalog->resolve($data['from'], $data['fromType'] ?? null);
+        } catch (ProviderException|UnsupportedCurrencyPairException $exception) {
+            $failure = $failurePresenter->present($exception);
+
+            return response()->json($failure, $failure['status']);
+        }
         $refresh = (bool) ($data['refresh'] ?? false);
         $conversions = [];
 

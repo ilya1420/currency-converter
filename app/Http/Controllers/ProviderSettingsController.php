@@ -26,7 +26,7 @@ final class ProviderSettingsController
 
                     return [$capability->value => [
                         'selected' => $selections->configured($capability)?->id,
-                        'default' => $providers[0]->id,
+                        'default' => $selections->automaticDefault($capability)?->id,
                         'providers' => array_map(fn (ProviderDefinition $provider): array => $this->provider($provider, $credentials), $providers),
                     ]];
                 }),

@@ -6,7 +6,6 @@ use App\Currency\Contracts\MarketDataProviderInterface;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\ProviderCapability;
-use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 
 final class MarketChartService
@@ -32,26 +31,18 @@ final class MarketChartService
         $capability = $currency->type === CurrencyType::CRYPTO
             ? ProviderCapability::CRYPTO_MARKET_DATA
             : ProviderCapability::FIAT_MARKET_DATA;
-        $configured = $this->selections->configured($capability);
+        $providers = $this->selections->candidates($capability, $this->providers);
 
         return $this->cache->remember(
-            'market-chart:v3:'.($configured?->id ?? 'automatic').":{$currency->type->value}:{$currency->code}:{$interval}",
+            'market-chart:v4:'.$this->selections->cacheIdentity($capability).":{$currency->type->value}:{$currency->code}:{$interval}",
             $ttl,
-            fn (): array => $this->loadFromProvider($currency, $interval, $configured?->adapterFor($capability)),
+            fn (): array => $this->loadFromProvider($currency, $interval, $providers),
         );
     }
 
-    /** @return array<string, mixed> */
-    private function loadFromProvider(Currency $currency, int $interval, ?string $selectedAdapter): array
+    /** @param list<MarketDataProviderInterface> $providers @return array<string, mixed> */
+    private function loadFromProvider(Currency $currency, int $interval, array $providers): array
     {
-        $providers = is_array($this->providers) ? array_values($this->providers) : iterator_to_array($this->providers, false);
-        if ($selectedAdapter !== null) {
-            $providers = array_values(array_filter($providers, static fn (MarketDataProviderInterface $provider): bool => $provider::class === $selectedAdapter));
-            if ($providers === []) {
-                throw new ProviderException('The selected market-data provider is not available in this application build.');
-            }
-        }
-
         foreach ($providers as $provider) {
             if (! $provider->supports($currency)) {
                 continue;

@@ -45,15 +45,13 @@ final class RateService
             ? ProviderCapability::CRYPTO_RATES
             : ProviderCapability::FIAT_RATES;
         $configuredProvider = $this->selections->configured($capability);
-        $providers = $configuredProvider === null
-            ? $this->providers
-            : $this->selectedProvider($configuredProvider->adapterFor($capability));
+        try {
+            $providers = $this->selections->candidates($capability, $this->providers);
+        } catch (ProviderException $exception) {
+            throw new RateUnavailableException('The selected rate provider is not available.', $configuredProvider?->id, previous: $exception);
+        }
 
         foreach ($providers as $provider) {
-            if ($configuredProvider === null && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
-                continue;
-            }
-
             if (! $provider->supports($from, $to)) {
                 if ($configuredProvider !== null) {
                     throw new RateUnavailableException("Selected provider [{$configuredProvider->id}] does not support {$from->code}/{$to->code}.", $configuredProvider->id, 'unsupported_pair');
@@ -95,20 +93,6 @@ final class RateService
             }
         }
         throw new RateUnavailableException("No rate is available for {$from->code}/{$to->code}.");
-    }
-
-    /** @return iterable<RateProviderInterface> */
-    private function selectedProvider(?string $adapter): iterable
-    {
-        if ($adapter !== null) {
-            foreach ($this->providers as $provider) {
-                if ($provider::class === $adapter) {
-                    return [$provider];
-                }
-            }
-        }
-
-        throw new RateUnavailableException('The selected rate provider is not available in this application build.');
     }
 
     private function ttl(RateSource $source): int

@@ -13,6 +13,7 @@ const FOUR_DECIMAL = new Set(['CLF', 'UYW']);
 export function createConverterState(catalog) {
     return {
         meta: currencyMeta,
+        catalogMessage: '',
         ...converterSlice(catalog),
         ...chartSlice(),
         ...uiSlice(),
@@ -29,9 +30,12 @@ export function createConverterState(catalog) {
             try {
                 const data = await currencyApi.catalog();
                 if (!Array.isArray(data.currencies)) return;
+                this.catalogMessage = data.message || '';
                 this.applyCatalog(data.currencies);
-                converterStorage.saveCatalog(data.currencies);
+                if (data.isComplete !== false) converterStorage.saveCatalog(data.currencies);
+                if (strict && data.isComplete === false) throw new Error(data.message || 'Каталог источника временно недоступен.');
             } catch (error) {
+                this.catalogMessage = error.message || 'Каталог источника временно недоступен.';
                 if (strict) throw error;
                 // Built-in currencies keep the converter available offline.
             }

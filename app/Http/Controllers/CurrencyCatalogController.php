@@ -23,7 +23,8 @@ final class CurrencyCatalogController
         $currencies = [];
 
         try {
-            foreach ($catalog->all() as $currency) {
+            $snapshot = $catalog->snapshot();
+            foreach ($snapshot['currencies'] as $currency) {
                 $currencies["{$currency->type->value}:{$currency->code}"] = [
                     'code' => $currency->code,
                     'type' => $currency->type->value,
@@ -38,7 +39,13 @@ final class CurrencyCatalogController
             return response()->json(['message' => 'Каталог выбранного источника временно недоступен.'], 503);
         }
 
-        return response()->json(['currencies' => array_values($currencies)]);
+        return response()->json([
+            'currencies' => array_values($currencies),
+            'cryptoProvider' => $snapshot['cryptoProvider'],
+            'isComplete' => $snapshot['isComplete'],
+            'isFallback' => $snapshot['isFallback'],
+            'message' => $snapshot['message'],
+        ], ! $snapshot['isComplete'] && ! $snapshot['isFallback'] ? 503 : 200);
     }
 
     private function localCryptoIcon(string $code): ?string

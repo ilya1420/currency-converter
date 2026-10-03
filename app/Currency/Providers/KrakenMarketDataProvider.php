@@ -7,6 +7,9 @@ use App\Currency\Contracts\MarketDataProviderInterface;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\ProviderRateLimitException;
+use App\Currency\Exceptions\ProviderResponseException;
+use App\Currency\Exceptions\ProviderTimeoutException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ExternalApiClientFactory;
 use Illuminate\Http\Client\ConnectionException;
@@ -120,11 +123,15 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         try {
             $response = ($this->clients ??= app(ExternalApiClientFactory::class))->for('kraken')->get($endpoint, $params);
         } catch (ConnectionException $exception) {
-            throw new ProviderException('Kraken market data is unavailable.', previous: $exception);
+            throw new ProviderTimeoutException('Kraken market data request failed.', $exception);
         }
 
+        if ($response->status() === 429) {
+            $retryAfter = $response->header('Retry-After');
+            throw new ProviderRateLimitException('Kraken market data rate limit reached.', is_numeric($retryAfter) ? max(0, (int) $retryAfter) : null);
+        }
         if ($response->failed() || $response->json('error') !== []) {
-            throw new ProviderException('Kraken market data is unavailable.');
+            throw new ProviderResponseException('Kraken market data is unavailable.');
         }
 
         $result = $response->json('result');
