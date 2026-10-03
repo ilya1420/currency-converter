@@ -6,6 +6,7 @@ use App\Currency\Enums\Currency;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\ProviderRateLimitException;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Providers\NbrbRateProvider;
 use Illuminate\Http\Client\ConnectionException;
@@ -39,7 +40,7 @@ class NbrbRateProviderTest extends TestCase
 
         $this->assertSame('3.120000000000000000', $rate->rate);
         $this->assertSame(RateSource::NBRB, $rate->source);
-        $this->assertSame('2026-09-24T00:00:00+03:00', $rate->publishedAt?->format(DATE_ATOM));
+        $this->assertSame('2026-09-24T00:00:00+03:00', $rate->rateDate?->format(DATE_ATOM));
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.nbrb.by/exrates/rates?periodicity=0');
     }
 
@@ -50,6 +51,30 @@ class NbrbRateProviderTest extends TestCase
         $rate = $this->provider->getRate(Currency::fiat('RUB'), Currency::fiat('BYN'));
 
         $this->assertSame('0.035000000000000000', $rate->rate);
+    }
+
+    public function test_force_refresh_bypasses_the_provider_catalog_cache(): void
+    {
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json'))]);
+
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_it_rejects_a_rate_without_an_effective_date(): void
+    {
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([[
+            'Cur_Abbreviation' => 'USD',
+            'Cur_Scale' => 1,
+            'Cur_OfficialRate' => 3.12,
+        ]])]);
+
+        $this->expectException(ProviderResponseException::class);
+
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
     }
 
     public function test_it_maps_http_errors_to_a_provider_exception(): void

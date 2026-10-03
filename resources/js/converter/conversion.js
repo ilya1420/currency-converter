@@ -51,12 +51,14 @@ export const conversionMethods = {
                     row.result = this.amount;
                     row.isStale = false;
                     row.isFallback = false;
+                    row.rateDate = null;
                     return;
                 }
                 const conversion = data.conversions[row.currency];
                 if (conversion?.error) {
                     row.isStale = false;
                     row.isFallback = false;
+                    row.rateDate = null;
                     row.error = this.errorLabel(conversion.error);
                     row.result = '';
                     delete this.factors[row.currency];
@@ -71,6 +73,7 @@ export const conversionMethods = {
                 if (!lastUpdatedAt || Date.parse(conversion.updatedAt) < Date.parse(lastUpdatedAt)) lastUpdatedAt = conversion.updatedAt;
                 row.isStale = Boolean(conversion.isStale);
                 row.isFallback = Boolean(conversion.isFallback);
+                row.rateDate = conversion.rateDate || conversion.rateDates?.[0] || null;
                 if (conversion.isStale) this.message = 'Используются сохранённые курсы. Не удалось получить актуальные данные.';
             });
             this.sources = [...new Set(sources)];
@@ -79,7 +82,10 @@ export const conversionMethods = {
             if (token === this.requestToken) {
                 this.message = 'Не удалось обновить курс. Показаны последние значения.';
                 this.rows.forEach((row) => {
-                    if (!row.result) row.error = 'Нет курса';
+                    if (row.currency !== this.base && row.result) {
+                        row.isStale = this.currencyType(this.base) === 'crypto' || this.currencyType(row.currency) === 'crypto';
+                        row.isFallback = true;
+                    } else if (!row.result) row.error = 'Нет курса';
                 });
             }
         } finally {
@@ -134,11 +140,16 @@ export const conversionMethods = {
             this.lastUpdatedAt = data.updatedAt;
             row.isStale = Boolean(data.isStale);
             row.isFallback = Boolean(data.isFallback);
+            row.rateDate = data.rateDate || data.rateDates?.[0] || null;
             if (data.isStale) this.message = 'Используются сохранённые курсы. Не удалось получить актуальные данные.';
         } catch (error) {
             if (token === this.requestToken && pair === `${this.base}:${row.currency}`) {
                 row.error = this.errorLabel(error.code);
                 this.message = error.message || 'Не удалось получить курс для выбранной валюты.';
+                if (row.result) {
+                    row.isFallback = true;
+                    row.isStale = this.currencyType(this.base) === 'crypto' || this.currencyType(row.currency) === 'crypto';
+                }
             }
         } finally {
             if (token === this.requestToken) row.loading = false;

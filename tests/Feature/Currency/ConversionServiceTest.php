@@ -61,7 +61,7 @@ class ConversionServiceTest extends TestCase
                 return isset($this->rates["{$from->code}/{$to->code}"]);
             }
 
-            public function getRate(Currency $from, Currency $to): ExchangeRate
+            public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
             {
                 return new ExchangeRate($from, $to, $this->rates["{$from->code}/{$to->code}"], RateSource::NBRB, new DateTimeImmutable);
             }

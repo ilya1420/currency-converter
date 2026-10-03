@@ -38,6 +38,20 @@ class ExchangeRateRepositoryTest extends TestCase
         $this->assertSame('3.15', $repository->findLatest(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'))?->rate);
     }
 
+    public function test_it_does_not_replace_a_newer_official_rate_date_with_an_older_response(): void
+    {
+        $repository = new ExchangeRateRepository;
+        $repository->save($this->rate('3.12', '2026-09-24T10:00:00+00:00', '2026-09-24'));
+
+        $result = $repository->save($this->rate('3.10', '2026-09-25T10:00:00+00:00', '2026-09-23'));
+        $stored = $repository->findLatest(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'));
+
+        $this->assertSame('3.12', $stored?->rate);
+        $this->assertSame('2026-09-24', $stored?->rateDate?->format('Y-m-d'));
+        $this->assertTrue($result->isFallback);
+        $this->assertSame('provider_outdated', $result->fallbackReason);
+    }
+
     public function test_it_returns_only_a_fresh_rate(): void
     {
         $repository = new ExchangeRateRepository;
@@ -47,8 +61,15 @@ class ExchangeRateRepositoryTest extends TestCase
         $this->assertNotNull($repository->findFresh(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'), new DateTimeImmutable('2026-09-24T09:59:00+00:00')));
     }
 
-    private function rate(string $value, string $fetchedAt): ExchangeRate
+    private function rate(string $value, string $fetchedAt, ?string $rateDate = null): ExchangeRate
     {
-        return new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), $value, RateSource::NBRB, new DateTimeImmutable($fetchedAt));
+        return new ExchangeRate(
+            Currency::fiat('USD'),
+            Currency::fiat('BYN'),
+            $value,
+            RateSource::NBRB,
+            new DateTimeImmutable($fetchedAt),
+            $rateDate === null ? null : new DateTimeImmutable($rateDate, new \DateTimeZone('Europe/Minsk')),
+        );
     }
 }

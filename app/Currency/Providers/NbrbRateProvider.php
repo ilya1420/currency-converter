@@ -43,14 +43,14 @@ final class NbrbRateProvider implements RateProviderInterface
             && $to->code === 'BYN';
     }
 
-    public function getRate(Currency $from, Currency $to): ExchangeRate
+    public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
     {
         if (! $this->supports($from, $to)) {
             throw new UnsupportedCurrencyPairException("NBRB does not support {$from->code}/{$to->code}.");
         }
 
         try {
-            $records = $this->catalog();
+            $records = $this->catalog($forceRefresh);
         } catch (ConnectionException $exception) {
             throw new ProviderException('NBRB is unavailable.', previous: $exception);
         }
@@ -62,6 +62,13 @@ final class NbrbRateProvider implements RateProviderInterface
         }
 
         $rate = $this->normalizeRate($record);
+        $rateDate = $this->rateDate($record);
+        if ($rateDate === null) {
+            throw new ProviderResponseException('NBRB response has no valid rate date.');
+        }
+        if ($rateDate->setTimezone(new DateTimeZone('Europe/Minsk'))->format('Y-m-d') > now('Europe/Minsk')->format('Y-m-d')) {
+            throw new ProviderResponseException('NBRB response has a future rate date.');
+        }
 
         return new ExchangeRate(
             $from,
@@ -69,7 +76,7 @@ final class NbrbRateProvider implements RateProviderInterface
             $rate,
             RateSource::NBRB,
             new DateTimeImmutable,
-            $this->publishedAt($record),
+            $rateDate,
         );
     }
 
@@ -79,9 +86,9 @@ final class NbrbRateProvider implements RateProviderInterface
     }
 
     /** @return array<mixed> */
-    private function catalog(): array
+    private function catalog(bool $forceRefresh = false): array
     {
-        if ($this->catalog !== null && $this->catalogFetchedAt?->modify('+30 minutes') > new DateTimeImmutable) {
+        if (! $forceRefresh && $this->catalog !== null && $this->catalogFetchedAt?->modify('+30 minutes') > new DateTimeImmutable) {
             return $this->catalog;
         }
 
@@ -135,7 +142,7 @@ final class NbrbRateProvider implements RateProviderInterface
     }
 
     /** @param array<string, mixed> $record */
-    private function publishedAt(array $record): ?DateTimeImmutable
+    private function rateDate(array $record): ?DateTimeImmutable
     {
         $date = $record['Date'] ?? null;
 

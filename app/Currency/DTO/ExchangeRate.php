@@ -17,9 +17,10 @@ final readonly class ExchangeRate
         public string $rate,
         public RateSource $source,
         public DateTimeImmutable $fetchedAt,
-        public ?DateTimeImmutable $publishedAt = null,
+        public ?DateTimeImmutable $rateDate = null,
         public bool $isStale = false,
         public ?string $fallbackReason = null,
+        public bool $isFallback = false,
     ) {
         try {
             $positive = BigDecimal::of($rate)->isPositive();

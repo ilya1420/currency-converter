@@ -48,6 +48,11 @@ final class CurrencyCache
         $this->repository()->put($key, $value, $ttl);
     }
 
+    public function forget(string $key): void
+    {
+        $this->repository()->forget($key);
+    }
+
     private function repository(): Repository
     {
         return $this->repository ??= Cache::store(config('currency.cache.store', 'file'));
