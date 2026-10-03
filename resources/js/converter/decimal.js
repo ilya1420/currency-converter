@@ -1,64 +1,65 @@
-export function multiply(left, right) {
-    const decimal = (value) => {
-        const [whole, fraction = ''] = String(value).replace(',', '.').split('.');
-        return [BigInt(`${whole}${fraction}` || '0'), fraction.length];
-    };
-    const [leftValue, leftScale] = decimal(left);
-    const [rightValue, rightScale] = decimal(right);
-    let value = (leftValue * rightValue).toString();
-    const scale = leftScale + rightScale;
-
-    if (scale) {
-        value = value.padStart(scale + 1, '0');
-        value = `${value.slice(0, -scale)}.${value.slice(-scale)}`;
-    }
-
-    return value.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+function decimalParts(value) {
+    const [whole, fraction = ''] = String(value).replace(',', '.').split('.');
+    return [BigInt(`${whole}${fraction}` || '0'), fraction.length];
 }
 
-export function divide(left, right, precision = 18) {
-    const decimal = (value) => {
-        const normalized = String(value).replace(',', '.');
-        const sign = normalized.startsWith('-') ? -1n : 1n;
-        const [whole, fraction = ''] = normalized.replace('-', '').split('.');
+function decimalString(value, scale) {
+    const sign = value < 0n ? '-' : '';
+    let digits = (value < 0n ? -value : value).toString();
+    if (scale) {
+        digits = digits.padStart(scale + 1, '0');
+        digits = `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+    }
+    return `${sign}${digits}`.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+}
 
-        return [sign * BigInt(`${whole}${fraction}` || '0'), fraction.length];
-    };
-    const [leftValue, leftScale] = decimal(left);
-    const [rightValue, rightScale] = decimal(right);
+function normalizeFraction(numerator, denominator) {
+    if (!denominator) throw new Error('Division by zero');
+    if (denominator < 0n) [numerator, denominator] = [-numerator, -denominator];
+    let divisor = numerator < 0n ? -numerator : numerator;
+    let remainder = denominator;
+    while (remainder) [divisor, remainder] = [remainder, divisor % remainder];
+    return { numerator: numerator / divisor, denominator: denominator / divisor };
+}
+
+/** @returns {{ numerator: bigint, denominator: bigint } | null} */
+export function ratio(left, right) {
+    const [leftValue, leftScale] = decimalParts(left);
+    const [rightValue, rightScale] = decimalParts(right);
     if (rightValue === 0n) return null;
+    return normalizeFraction(leftValue * 10n ** BigInt(rightScale), rightValue * 10n ** BigInt(leftScale));
+}
 
-    const sign = (leftValue < 0n) !== (rightValue < 0n) ? '-' : '';
-    const numerator = (leftValue < 0n ? -leftValue : leftValue) * (10n ** BigInt(precision + rightScale));
-    const denominator = (rightValue < 0n ? -rightValue : rightValue) * (10n ** BigInt(leftScale));
-    let value = (numerator / denominator).toString().padStart(precision + 1, '0');
-    value = `${value.slice(0, -precision)}.${value.slice(-precision)}`;
-
-    return `${sign}${value}`.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+/** @param {string | { numerator: bigint, denominator: bigint }} right */
+export function multiply(left, right) {
+    const [leftValue, leftScale] = decimalParts(left);
+    if (typeof right === 'object') {
+        const fraction = normalizeFraction(leftValue * right.numerator, 10n ** BigInt(leftScale) * right.denominator);
+        let denominator = fraction.denominator;
+        let twos = 0;
+        let fives = 0;
+        while (denominator % 2n === 0n) { denominator /= 2n; twos++; }
+        while (denominator % 5n === 0n) { denominator /= 5n; fives++; }
+        const precision = denominator === 1n ? Math.max(twos, fives) : 18;
+        return fractionToDecimal(fraction, precision, true);
+    }
+    const [rightValue, rightScale] = decimalParts(right);
+    return decimalString(leftValue * rightValue, leftScale + rightScale);
 }
 
 export function formatAmount(value, { fractionDigits = 2, maxFractionDigits = fractionDigits, trimTrailingZeros = false } = {}) {
     if (value === null || value === undefined || value === '') return '—';
 
-    const [integerPart, decimalPart = ''] = String(value).split('.');
+    const [numerator, scale] = decimalParts(value);
+    const fraction = { numerator, denominator: 10n ** BigInt(scale) };
+    const standardValue = fractionToDecimal(fraction, fractionDigits, true);
+    const precision = trimTrailingZeros ? maxFractionDigits
+        : fractionDigits === maxFractionDigits || numerator === 0n || standardValue !== '0' ? fractionDigits : maxFractionDigits;
+    const [integerPart, decimalPart = ''] = fractionToDecimal(fraction, precision, true).split('.');
     const sign = integerPart.startsWith('-') ? '-' : '';
     const whole = `${sign}${integerPart.replace('-', '').replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}`;
-    const standardDecimals = decimalPart.padEnd(fractionDigits, '0').slice(0, fractionDigits);
-
-    if (trimTrailingZeros) {
-        const decimals = decimalPart.slice(0, maxFractionDigits).replace(/0+$/, '');
-
-        return decimals ? `${whole}.${decimals}` : whole;
-    }
-
-    // ISO precision is used for ordinary fiat values. A non-zero converted
-    // value must never be displayed as zero solely because it is very small.
-    if (fractionDigits === maxFractionDigits || Number(`${integerPart}.${decimalPart}`) === 0 || Number(`${integerPart}.${decimalPart}`) >= 1 || Number(`${integerPart}.${decimalPart}`) <= -1 || Number(`0.${standardDecimals}`) !== 0) {
-        return fractionDigits ? `${whole}.${standardDecimals}` : whole;
-    }
-
-    const decimals = decimalPart.slice(0, maxFractionDigits).replace(/0+$/, '');
-
+    const decimals = trimTrailingZeros || precision !== fractionDigits
+        ? decimalPart : decimalPart.padEnd(fractionDigits, '0');
     return decimals ? `${whole}.${decimals}` : whole;
 }
 
@@ -68,18 +69,7 @@ export function parseExpression(input) {
     if (!tokens.length || tokens.join('') !== clean) throw new Error('Invalid expression');
 
     let index = 0;
-    const gcd = (left, right) => {
-        let a = left < 0n ? -left : left;
-        let b = right;
-        while (b) [a, b] = [b, a % b];
-        return a;
-    };
-    const normalize = (numerator, denominator) => {
-        if (!denominator) throw new Error('Division by zero');
-        if (denominator < 0n) [numerator, denominator] = [-numerator, -denominator];
-        const divisor = gcd(numerator, denominator);
-        return { numerator: numerator / divisor, denominator: denominator / divisor };
-    };
+    const normalize = normalizeFraction;
     const number = (value) => {
         const [whole, fraction = ''] = value.split('.');
         return normalize(BigInt(`${whole}${fraction}`), 10n ** BigInt(fraction.length));
@@ -129,19 +119,10 @@ export function parseExpression(input) {
     return result;
 }
 
-export function fractionToDecimal({ numerator, denominator }, precision = 2) {
-    const sign = numerator < 0n ? '-' : '';
-    let value = numerator < 0n ? -numerator : numerator;
-    const whole = value / denominator;
-    let remainder = value % denominator;
-    if (!remainder) return `${sign}${whole}`;
-
-    let fraction = '';
-    for (let position = 0; position < precision && remainder; position++) {
-        remainder *= 10n;
-        fraction += (remainder / denominator).toString();
-        remainder %= denominator;
-    }
-
-    return `${sign}${whole}.${fraction.replace(/0+$/, '')}`;
+export function fractionToDecimal({ numerator, denominator }, precision = 2, round = false) {
+    const negative = numerator < 0n;
+    const scaled = (negative ? -numerator : numerator) * 10n ** BigInt(precision);
+    let value = scaled / denominator;
+    if (round && (scaled % denominator) * 2n >= denominator) value++;
+    return decimalString(negative ? -value : value, precision);
 }

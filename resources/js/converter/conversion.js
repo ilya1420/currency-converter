@@ -1,4 +1,4 @@
-import { divide, multiply } from './decimal.js';
+import { multiply, ratio } from './decimal.js';
 import { currencyApi } from './api.js';
 
 export const conversionMethods = {
@@ -196,8 +196,8 @@ export const conversionMethods = {
             this.base = row.currency;
             this.factors = {};
             this.rows.forEach((item) => {
-                if (item.currency === this.base) return;
-                const factor = divide(previousResults.get(item.currency), sourceAmount);
+                if (item.currency === this.base || !item.result || item.error || this.currencyUnsupported?.(item.currency)) return;
+                const factor = ratio(previousResults.get(item.currency), sourceAmount);
                 if (factor !== null) this.factors[item.currency] = factor;
             });
         }
