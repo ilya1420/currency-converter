@@ -32,8 +32,8 @@
         </div>
     </section>
 
-    <p x-show="activeTab === 'converter' && (message || catalogMessage)" x-cloak class="mx-5 mb-3 shrink-0 text-xs text-pink-300" aria-live="polite"
-       x-text="[message, catalogMessage].filter(Boolean).join(' ')"></p>
+    <p x-show="activeTab === 'converter' && (message || catalogMessage || storageMessage)" x-cloak class="mx-5 mb-3 shrink-0 text-xs text-pink-300" aria-live="polite"
+       x-text="[message, catalogMessage, storageMessage].filter(Boolean).join(' ')"></p>
 
     <section x-show="activeTab === 'converter'" class="flex min-h-0 w-full flex-1 flex-col overflow-hidden border-y border-white/5 bg-[#18181B]">
         <div class="relative min-h-0 flex-1 overflow-hidden">

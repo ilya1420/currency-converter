@@ -10,7 +10,8 @@ export const conversionMethods = {
     },
     async refreshAll() { await this.loadAll(true); },
     async loadAll(refresh = false) {
-        const targets = [...new Set(this.rows.map((row) => row.currency))];
+        if (this.providerSettingsSaving && !refresh) return;
+        const targets = [...new Set(this.rows.map((row) => row.currency))].filter((currency) => !this.currencyUnsupported?.(currency));
         const key = `${this.base}|${targets.join(',')}|${refresh ? 'refresh' : 'cached'}`;
         if (this.loadAllPromise && this.loadAllKey === key) return this.loadAllPromise;
 
@@ -28,7 +29,16 @@ export const conversionMethods = {
     async loadAllRequest(refresh, targets) {
         const token = ++this.requestToken;
         this.loading = true; this.message = '';
-        this.rows.forEach((row) => { row.loading = true; row.error = ''; });
+        this.rows.forEach((row) => {
+            row.loading = !this.currencyUnsupported?.(row.currency);
+            row.error = this.currencyUnsupported?.(row.currency) ? 'Не поддерживается' : '';
+        });
+        if (this.currencyUnsupported?.(this.base)) {
+            this.rows.forEach((row) => { row.loading = false; });
+            this.loading = false;
+            this.message = 'Базовая валюта не поддерживается выбранным источником.';
+            return;
+        }
         void this.loadDailyChanges(token, targets);
         try {
             const data = await currencyApi.conversions({ from: this.base, fromType: this.currencyType(this.base), targets, refresh });
@@ -36,6 +46,7 @@ export const conversionMethods = {
             const sources = [];
             let lastUpdatedAt = null;
             this.rows.forEach((row) => {
+                if (this.currencyUnsupported?.(row.currency)) return;
                 if (row.currency === this.base) {
                     row.result = this.amount;
                     row.isStale = false;
@@ -100,6 +111,12 @@ export const conversionMethods = {
         }
     },
     async loadRow(row, refresh = false, token = this.requestToken) {
+        if (this.providerSettingsSaving && !refresh) return;
+        if (this.currencyUnsupported?.(row.currency) || this.currencyUnsupported?.(this.base)) {
+            row.error = 'Не поддерживается';
+            row.loading = false;
+            return;
+        }
         if (row.currency === this.base) {
             row.result = this.amount;
             row.dailyChange = null;
@@ -137,7 +154,7 @@ export const conversionMethods = {
         })[code] || 'Нет курса';
     },
     activateRow(row) {
-        if (!row.result || row.error) return;
+        if (this.providerSettingsSaving || !row.result || row.error || this.currencyUnsupported?.(row.currency)) return;
 
         const sourceAmount = String(row.result);
         const baseChanged = row.currency !== this.base;
@@ -151,7 +168,6 @@ export const conversionMethods = {
                 const factor = divide(previousResults.get(item.currency), sourceAmount);
                 if (factor !== null) this.factors[item.currency] = factor;
             });
-            this.save();
         }
 
         // The current value remains visible, but the next digit starts a new amount.
@@ -160,6 +176,7 @@ export const conversionMethods = {
         this.displayAmount = sourceAmount;
         this.isFreshInput = true;
         this.recalculate(sourceAmount);
+        this.save();
         if (baseChanged) void this.loadAll();
         this.showKeyboard();
         this.buzz();

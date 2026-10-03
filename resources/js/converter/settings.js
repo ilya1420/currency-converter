@@ -51,6 +51,7 @@ export const providerSettingsMethods = {
     async saveProviderSelection(capability, providerId) {
         if (this.providerSettingsSaving) return;
 
+        this.invalidateProviderData?.(capability);
         this.providerSettingsSaving = true;
         this.providerSettingsError = '';
         try {
@@ -58,7 +59,10 @@ export const providerSettingsMethods = {
             await this.reloadProviderSettings();
         } catch (error) {
             this.providerSettingsError = error.message || 'Не удалось сохранить выбор провайдера.';
-            try { await this.reloadProviderSettings(); } catch { /* Keep the original save error visible. */ }
+            try {
+                await this.reloadProviderSettings();
+                await this.refreshAfterProviderSelection(capability);
+            } catch { /* Keep the original save error visible. */ }
             this.providerSettingsSaving = false;
             return;
         }
@@ -73,6 +77,7 @@ export const providerSettingsMethods = {
     async resetProviderSelection(capability) {
         if (this.providerSettingsSaving) return;
 
+        this.invalidateProviderData?.(capability);
         this.providerSettingsSaving = true;
         this.providerSettingsError = '';
         try {
@@ -80,6 +85,10 @@ export const providerSettingsMethods = {
             await this.reloadProviderSettings();
         } catch (error) {
             this.providerSettingsError = error.message || 'Не удалось сбросить выбор провайдера.';
+            try {
+                await this.reloadProviderSettings();
+                await this.refreshAfterProviderSelection(capability);
+            } catch { /* Keep the original reset error visible. */ }
             this.providerSettingsSaving = false;
             return;
         }
@@ -97,12 +106,14 @@ export const providerSettingsMethods = {
     async saveCoinGeckoKey() {
         if (this.providerSettingsSaving || !this.coingeckoApiKey.trim()) return;
 
+        this.invalidateProviderData?.('crypto_rates');
         this.providerSettingsSaving = true;
         this.providerSettingsError = '';
         try {
             await currencyApi.saveCoinGeckoKey(this.coingeckoApiKey.trim());
             this.coingeckoApiKey = '';
             await this.reloadProviderSettings();
+            await this.refreshAfterProviderSelection('crypto_rates');
         } catch (error) {
             this.providerSettingsError = error.message || 'Не удалось проверить ключ CoinGecko.';
         } finally {
@@ -110,7 +121,11 @@ export const providerSettingsMethods = {
         }
     },
     async refreshAfterProviderSelection(capability) {
-        if (capability === 'crypto_rates') await this.loadCatalog(true);
+        this.invalidateProviderData?.(capability);
+        if (capability === 'crypto_rates' || capability === 'catalog') {
+            try { await this.loadCatalog(true); } finally { await this.loadAll(true); }
+            return;
+        }
         await this.loadAll(true);
         if (capability.endsWith('_market_data') && this.activeTab === 'charts') await this.loadChart();
     },

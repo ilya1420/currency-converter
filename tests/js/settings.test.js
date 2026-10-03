@@ -80,3 +80,20 @@ test('CoinGecko key is cleared only after successful verification and save', asy
         Object.assign(currencyApi, original);
     }
 });
+
+test('saved crypto provider still refreshes rates when its catalog is unavailable', async () => {
+    const originals = { selectProvider: currencyApi.selectProvider, providerSettings: currencyApi.providerSettings };
+    currencyApi.selectProvider = async () => ({ selected: 'coingecko' });
+    currencyApi.providerSettings = async () => ({ capabilities: { crypto_rates: { selected: 'coingecko' } } });
+    try {
+        const state = settingsState();
+        const invalidations = [];
+        state.invalidateProviderData = (capability) => invalidations.push(capability);
+        state.loadCatalog = async () => { throw new Error('Каталог недоступен'); };
+        await state.saveProviderSelection('crypto_rates', 'coingecko');
+        assert.deepEqual(invalidations, ['crypto_rates', 'crypto_rates']);
+        assert.equal(state.refreshes, 1);
+        assert.match(state.providerSettingsError, /Выбор сохранён.*Каталог недоступен/);
+        assert.equal(state.providerSettingsSaving, false);
+    } finally { Object.assign(currencyApi, originals); }
+});

@@ -12,8 +12,12 @@ const THREE_DECIMAL = new Set(['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'])
 const FOUR_DECIMAL = new Set(['CLF', 'UYW']);
 export function createConverterState(catalog) {
     return {
-        meta: currencyMeta,
+        meta: Object.fromEntries(Object.entries(currencyMeta).map(([code, info]) => [code, { ...info }])),
         catalogMessage: '',
+        storageMessage: '',
+        catalogToken: 0,
+        catalogComplete: false,
+        cryptoProvider: null,
         ...converterSlice(catalog),
         ...chartSlice(),
         ...uiSlice(),
@@ -21,27 +25,71 @@ export function createConverterState(catalog) {
         init() {
             if (this.initializationPromise) return this.initializationPromise;
 
-            const cachedCatalog = converterStorage.loadCatalog();
-            if (cachedCatalog.length) this.applyCatalog(cachedCatalog);
+            converterStorage.onWriteFailure = () => { this.storageMessage = 'Не удалось сохранить настройки на устройстве. Изменения доступны до закрытия приложения.'; };
             this.initializeLayout();
             this.initializationPromise = this.loadCatalog();
         },
+        invalidateProviderData(capability) {
+            if (capability === 'crypto_rates' || capability === 'catalog') this.catalogToken++;
+            if (capability?.endsWith('_market_data')) {
+                this.chartRequestToken++;
+                this.chartLoading = false;
+                this.chart = null;
+            }
+            if (capability === 'crypto_rates') {
+                this.catalogComplete = false;
+                this.cryptoProvider = null;
+                this.applyCatalog(this.catalog.filter(({ type }) => type === 'fiat'));
+            }
+            this.requestToken++;
+            this.loadAllKey = null;
+            this.factors = {};
+            this.sources = [];
+            this.lastUpdatedAt = null;
+            this.rows.forEach((item) => { item.loading = false; item.dailyChange = null; });
+            this.loading = false;
+        },
         async loadCatalog(strict = false) {
+            const token = ++this.catalogToken;
             try {
+                const settings = this.providerSettings || await currencyApi.providerSettings();
+                if (token !== this.catalogToken) return;
+                const capability = settings.capabilities?.crypto_rates;
+                const provider = capability?.selected || capability?.default || null;
+                if (provider !== this.cryptoProvider) {
+                    this.cryptoProvider = provider;
+                    this.catalogComplete = false;
+                    const fiat = this.catalog.filter(({ type }) => type === 'fiat');
+                    const cached = converterStorage.loadCatalog(provider);
+                    this.applyCatalog(cached.length ? cached : fiat);
+                }
                 const data = await currencyApi.catalog();
-                if (!Array.isArray(data.currencies)) return;
+                if (token !== this.catalogToken) return;
+                if (!Array.isArray(data.currencies)) throw new Error('Некорректный ответ каталога валют.');
+                if (data.cryptoProvider && provider && data.cryptoProvider !== provider) throw new Error('Источник каталога изменился. Обновите данные.');
                 this.catalogMessage = data.message || '';
+                this.catalogComplete = data.isComplete !== false;
                 this.applyCatalog(data.currencies);
-                if (data.isComplete !== false) converterStorage.saveCatalog(data.currencies);
-                if (strict && data.isComplete === false) throw new Error(data.message || 'Каталог источника временно недоступен.');
+                if (this.catalogComplete && !data.isFallback) converterStorage.saveCatalog(data.currencies, data.cryptoProvider || provider);
+                if (strict && !this.catalogComplete) throw new Error(data.message || 'Каталог источника временно недоступен.');
             } catch (error) {
+                if (token !== this.catalogToken) return;
+                this.catalogComplete = false;
                 this.catalogMessage = error.message || 'Каталог источника временно недоступен.';
                 if (strict) throw error;
-                // Built-in currencies keep the converter available offline.
             }
+        },
+        currencyUnsupported(currency) {
+            return this.catalogComplete && !this.currencies.includes(currency);
         },
         applyCatalog(currencies) {
             this.catalog = currencies;
+            this.rows.forEach((item) => {
+                if (this.catalogComplete && !currencies.some(({ code }) => code === item.currency)) {
+                    item.error = 'Не поддерживается';
+                    delete this.factors[item.currency];
+                } else if (item.error === 'Не поддерживается') item.error = '';
+            });
             this.currencies = currencies.map(({ code }) => code);
             currencies.forEach(({ code, type, name, icon, flag }) => {
                 this.meta[code] ??= { label: code, color: type === 'crypto' ? cryptoFallbackColor(code) : fiatFallbackColor(code) };
@@ -82,6 +130,7 @@ export function createConverterState(catalog) {
                 });
 
                 this.base = savedBase;
+                if (saved.amount !== undefined) this.amount = this.displayAmount = saved.amount;
                 this.keyboardVisible = saved.keyboardVisible !== false;
                 if (currencies.length) {
                     this.rows = currencies.map((currency, index) => row(index + 1, currency));
@@ -109,6 +158,10 @@ export function createConverterState(catalog) {
         inputFractionDigits() { return this.currencyType(this.base) === 'crypto' ? 6 : this.fiatFractionDigits(this.base); },
         formatAmount(value, currency = this.base) { const crypto = this.currencyType(currency) === 'crypto'; return formatDecimalAmount(value, { fractionDigits: crypto ? 6 : this.fiatFractionDigits(currency), maxFractionDigits: 6, trimTrailingZeros: crypto }); },
         buzz() { if (navigator.vibrate) navigator.vibrate(8); },
-        save() { converterStorage.saveLayout({ base: this.base, keyboardVisible: this.keyboardVisible, rows: this.rows.map((item) => ({ ...item, type: this.currencyType(item.currency) })) }); },
+        save() {
+            const amount = /^-?\d+(?:\.\d*)?$/.test(this.amount)
+                ? this.amount : this.rows.find(({ currency }) => currency === this.base)?.result;
+            converterStorage.saveLayout({ base: this.base, amount, keyboardVisible: this.keyboardVisible, rows: this.rows.map((item) => ({ ...item, type: this.currencyType(item.currency) })) });
+        },
     };
 }

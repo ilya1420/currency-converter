@@ -6,6 +6,8 @@ import { converterStorage } from '../../resources/js/converter/storage.js';
 import { currencyApi } from '../../resources/js/converter/api.js';
 
 test('catalog fallback preserves assets and exposes a separate warning without persisting it as fresh', async () => {
+    const originalSettings = currencyApi.providerSettings;
+    currencyApi.providerSettings = async () => ({ capabilities: { crypto_rates: { default: 'kraken' } } });
     const originalRequest = currencyApi.catalog;
     const originalSave = converterStorage.saveCatalog;
     let saves = 0;
@@ -19,6 +21,7 @@ test('catalog fallback preserves assets and exposes a separate warning without p
         assert.equal(saves, 0);
         await assert.rejects(state.loadCatalog(true), /Сохранённый каталог/);
     } finally {
+        currencyApi.providerSettings = originalSettings;
         currencyApi.catalog = originalRequest;
         converterStorage.saveCatalog = originalSave;
     }
@@ -57,9 +60,11 @@ test('startup restores the cached catalog and layout before the remote catalog r
     ];
     const values = new Map([
         ['currency-converter-layout', JSON.stringify({ activeCurrency: 'ZEC', rows: [{ currency: 'ZEC' }, { currency: 'USD' }] })],
-        ['currency-converter-catalog', JSON.stringify(cachedCatalog)],
+        ['currency-converter-catalog:kraken', JSON.stringify({ version: 1, provider: 'kraken', currencies: cachedCatalog })],
     ]);
     const previousStorage = globalThis.localStorage;
+    const previousSettingsRequest = currencyApi.providerSettings;
+    currencyApi.providerSettings = async () => ({ capabilities: { crypto_rates: { default: 'kraken' } } });
     const previousCatalogRequest = currencyApi.catalog;
     globalThis.localStorage = {
         getItem: (key) => values.get(key) ?? null,
@@ -74,6 +79,7 @@ test('startup restores the cached catalog and layout before the remote catalog r
         state.loadAll = () => { conversionLoads++; };
 
         const initializationResult = state.init();
+        await Promise.resolve();
 
         assert.equal(initializationResult, undefined);
         assert.deepEqual(state.rows.map(({ currency }) => currency), ['ZEC', 'USD']);
@@ -85,8 +91,9 @@ test('startup restores the cached catalog and layout before the remote catalog r
         await state.initializationPromise;
 
         assert.equal(state.currencies.includes('ETH'), true);
-        assert.equal(JSON.parse(values.get('currency-converter-catalog')).some(({ code }) => code === 'ETH'), true);
+        assert.equal(JSON.parse(values.get('currency-converter-catalog:kraken')).currencies.some(({ code }) => code === 'ETH'), true);
     } finally {
+        currencyApi.providerSettings = previousSettingsRequest;
         currencyApi.catalog = previousCatalogRequest;
         globalThis.localStorage = previousStorage;
     }
@@ -182,4 +189,133 @@ test('last updated label is hidden when current results have no provider metadat
     state.lastUpdatedAt = '2026-09-28T00:00:00Z';
 
     assert.equal(state.lastUpdatedLabel, '');
+});
+
+test('late startup catalog cannot replace the catalog of a newly selected provider', async () => {
+    const originals = { catalog: currencyApi.catalog, providerSettings: currencyApi.providerSettings };
+    const originalStorage = globalThis.localStorage;
+    const values = new Map();
+    globalThis.localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    currencyApi.providerSettings = async () => ({ capabilities: { crypto_rates: { default: 'kraken' } } });
+    const pending = [];
+    currencyApi.catalog = () => new Promise((resolve) => pending.push(resolve));
+    try {
+        const state = createConverterState([{ code: 'USD', type: 'fiat' }]);
+        state.loadAll = () => Promise.resolve();
+        state.init();
+        await Promise.resolve();
+        state.amount = '123.456';
+        state.rows.push({ currency: 'BONK', result: '20', error: '' });
+        state.invalidateProviderData('crypto_rates');
+        state.providerSettings = { capabilities: { crypto_rates: { selected: 'coingecko' } } };
+        const reload = state.loadCatalog(true);
+        pending[1]({ cryptoProvider: 'coingecko', isComplete: true, currencies: [{ code: 'USD', type: 'fiat' }, { code: 'ETH', type: 'crypto' }] });
+        await reload;
+        pending[0]({ cryptoProvider: 'kraken', isComplete: true, currencies: [{ code: 'BTC', type: 'crypto' }] });
+        await state.initializationPromise;
+        assert.deepEqual(state.currencies, ['USD', 'ETH']);
+        assert.equal(state.amount, '123.456');
+        assert.equal(state.rows.at(-1).currency, 'BONK');
+        assert.equal(state.rows.at(-1).error, 'Не поддерживается');
+        assert.equal(state.rows.at(-1).result, '20');
+        assert.equal(values.has('currency-converter-catalog:kraken'), false);
+        assert.equal(values.has('currency-converter-catalog:coingecko'), true);
+    } finally { Object.assign(currencyApi, originals); globalThis.localStorage = originalStorage; }
+});
+
+test('failed catalog lookup after provider switch cannot reuse another provider cache or prove unsupported assets', async () => {
+    const originals = { catalog: currencyApi.catalog, providerSettings: currencyApi.providerSettings };
+    const originalStorage = globalThis.localStorage;
+    const values = new Map();
+    globalThis.localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    converterStorage.saveCatalog([{ code: 'BTC', type: 'crypto' }], 'kraken');
+    currencyApi.catalog = async () => { throw new Error('Каталог недоступен'); };
+    try {
+        const state = createConverterState([{ code: 'USD', type: 'fiat' }, { code: 'BTC', type: 'crypto' }]);
+        state.cryptoProvider = 'kraken';
+        state.catalogComplete = true;
+        state.rows.push({ currency: 'BONK', result: '', error: '' });
+        state.invalidateProviderData('crypto_rates');
+        state.providerSettings = { capabilities: { crypto_rates: { selected: 'coingecko' } } };
+        await assert.rejects(state.loadCatalog(true), /Каталог недоступен/);
+        assert.deepEqual(state.currencies, ['USD']);
+        assert.equal(state.currencyUnsupported('BONK'), false);
+        assert.equal(state.rows.at(-1).currency, 'BONK');
+        assert.equal(state.catalogMessage, 'Каталог недоступен');
+    } finally { Object.assign(currencyApi, originals); globalThis.localStorage = originalStorage; }
+});
+
+test('storage failure shows a warning while preserving changed layout in memory', async () => {
+    const originalStorage = globalThis.localStorage;
+    const originals = { catalog: currencyApi.catalog, providerSettings: currencyApi.providerSettings };
+    const originalHandler = converterStorage.onWriteFailure;
+    globalThis.localStorage = { getItem: () => null, setItem: () => { throw new Error('QuotaExceeded'); } };
+    currencyApi.providerSettings = async () => ({ capabilities: {} });
+    currencyApi.catalog = async () => ({ currencies: [{ code: 'USD', type: 'fiat' }], isComplete: true });
+    try {
+        const state = createConverterState([]);
+        state.loadAll = () => Promise.resolve();
+        state.init();
+        await state.initializationPromise;
+        state.amount = '42';
+        state.save();
+        assert.equal(state.amount, '42');
+        assert.match(state.storageMessage, /Не удалось сохранить/);
+    } finally {
+        globalThis.localStorage = originalStorage;
+        Object.assign(currencyApi, originals);
+        converterStorage.onWriteFailure = originalHandler;
+    }
+});
+
+test('startup settings response is ignored after a provider selection begins', async () => {
+    const originals = { catalog: currencyApi.catalog, providerSettings: currencyApi.providerSettings };
+    let resolveSettings;
+    let requests = 0;
+    currencyApi.providerSettings = () => new Promise((resolve) => { resolveSettings = resolve; });
+    currencyApi.catalog = async () => { requests++; return { cryptoProvider: 'coingecko', isComplete: true, currencies: [{ code: 'ETH', type: 'crypto' }] }; };
+    try {
+        const state = createConverterState([]);
+        const startup = state.loadCatalog();
+        state.invalidateProviderData('crypto_rates');
+        state.providerSettings = { capabilities: { crypto_rates: { selected: 'coingecko' } } };
+        await state.loadCatalog(true);
+        resolveSettings({ capabilities: { crypto_rates: { default: 'kraken' } } });
+        await startup;
+        assert.equal(requests, 1);
+        assert.equal(state.cryptoProvider, 'coingecko');
+        assert.deepEqual(state.currencies, ['ETH']);
+    } finally { Object.assign(currencyApi, originals); }
+});
+
+test('saved evaluated amount and layout are restored after a restart', () => {
+    const originalStorage = globalThis.localStorage;
+    const values = new Map();
+    globalThis.localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    try {
+        const first = createConverterState([{ code: 'USD', type: 'fiat' }]);
+        first.amount = '12+3';
+        first.rows = [{ currency: 'USD', result: '15' }, { currency: 'BONK', result: '1' }];
+        first.meta.BONK = { type: 'crypto' };
+        first.save();
+        const returning = createConverterState([{ code: 'USD', type: 'fiat' }]);
+        returning.loadAll = () => Promise.resolve();
+        returning.initializeLayout();
+        assert.equal(returning.amount, '15');
+        assert.equal(returning.displayAmount, '15');
+        assert.deepEqual(returning.rows.map(({ currency }) => currency), ['USD', 'BONK']);
+        assert.equal(returning.currencyType('BONK'), 'crypto');
+    } finally { globalThis.localStorage = originalStorage; }
+});
+
+test('changing daily-change provider preserves the independent chart and startup catalog request', () => {
+    const state = createConverterState([]);
+    state.chart = { source: 'Kraken', candles: [] };
+    state.chartRequestToken = 4;
+    state.catalogToken = 2;
+    state.invalidateProviderData('crypto_daily_changes');
+    assert.equal(state.chart.source, 'Kraken');
+    assert.equal(state.chartRequestToken, 4);
+    assert.equal(state.catalogToken, 2);
+    assert.equal(state.requestToken, 1);
 });

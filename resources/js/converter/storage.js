@@ -14,12 +14,50 @@ function read(key, fallback) {
     }
 }
 
+function write(key, value) {
+    try {
+        if (value === undefined) localStorage.removeItem(key);
+        else localStorage.setItem(key, JSON.stringify(value));
+        return true;
+    } catch {
+        converterStorage.onWriteFailure?.();
+        return false;
+    }
+}
+
+function sanitizeLayout(value) {
+    if (!value || typeof value !== 'object' || (value.version !== undefined && value.version !== 1)
+        || !Array.isArray(value.rows)) return null;
+    const rows = value.rows.filter((item) => item && validCurrencyCode(item.currency))
+        .map(({ currency, type }) => ({ currency, type: type === 'crypto' ? 'crypto' : 'fiat' }));
+    const uniqueRows = [...new Map(rows.map((item) => [item.currency, item])).values()].slice(0, 100);
+    if (!uniqueRows.length) return null;
+    const base = value.activeCurrency || value.base;
+    return {
+        version: 1,
+        activeCurrency: validCurrencyCode(base) && uniqueRows.some(({ currency }) => currency === base) ? base : uniqueRows[0].currency,
+        keyboardVisible: value.keyboardVisible !== false,
+        amount: validInput(value.amount) ? value.amount : undefined,
+        rows: uniqueRows,
+    };
+}
+
+function catalogKey(provider) {
+    return typeof provider === 'string' && /^[a-z0-9_-]{1,64}$/.test(provider)
+        ? `${CURRENCY_CATALOG_KEY}:${provider}` : null;
+}
+
 function validCurrencyCode(currency) {
     return typeof currency === 'string' && /^[A-Z0-9]{2,10}$/.test(currency);
 }
 
 function validAmount(amount) {
     return typeof amount === 'string' && amount.length <= 64 && /^\d+(?:\.\d+)?$/.test(amount);
+}
+
+function validInput(amount) {
+    return typeof amount === 'string' && amount.length > 0 && amount.length <= 64
+        && /^-?\d+(?:\.\d*)?$/.test(amount);
 }
 
 function sanitizeHistoryEntry(entry) {
@@ -67,37 +105,35 @@ function sanitizeCatalog(currencies) {
 }
 
 export const converterStorage = {
-    loadCatalog() {
-        return sanitizeCatalog(read(CURRENCY_CATALOG_KEY, []));
+    onWriteFailure: null,
+    loadCatalog(provider) {
+        const key = catalogKey(provider);
+        if (!key) return [];
+        const saved = read(key, null);
+        return saved?.version === 1 && saved.provider === provider ? sanitizeCatalog(saved.currencies) : [];
     },
-    saveCatalog(currencies) {
-        try {
-            localStorage.setItem(CURRENCY_CATALOG_KEY, JSON.stringify(sanitizeCatalog(currencies)));
-        } catch {}
+    saveCatalog(currencies, provider) {
+        const key = catalogKey(provider);
+        return key ? write(key, { version: 1, provider, currencies: sanitizeCatalog(currencies) }) : false;
     },
     loadLayout() {
-        return read(LAYOUT_KEY, null);
+        return sanitizeLayout(read(LAYOUT_KEY, null));
     },
-    saveLayout({ base, keyboardVisible, rows }) {
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify({
-            activeCurrency: base,
-            keyboardVisible,
-            rows: rows.map(({ currency, type }) => ({ currency, type: type === 'crypto' ? 'crypto' : 'fiat' })),
-        }));
+    saveLayout({ base, keyboardVisible, rows, amount }) {
+        return write(LAYOUT_KEY, sanitizeLayout({ version: 1, activeCurrency: base, keyboardVisible, rows, amount }));
     },
     hasSeenFirstRunHint() {
         return read(FIRST_RUN_HINT_KEY, false) === true;
     },
     markFirstRunHintSeen() {
-        try {
-            localStorage.setItem(FIRST_RUN_HINT_KEY, 'true');
-        } catch {}
+        return write(FIRST_RUN_HINT_KEY, true);
     },
     loadCryptoGroups() {
-        return { fiat: true, popular: true, other: true, stable: true, meme: true, alt: true, ...read(CRYPTO_GROUPS_KEY, {}) };
+        const saved = read(CRYPTO_GROUPS_KEY, {});
+        return Object.fromEntries(['fiat', 'popular', 'other', 'stable', 'meme', 'alt'].map((key) => [key, saved?.[key] !== false]));
     },
     saveCryptoGroups(groups) {
-        localStorage.setItem(CRYPTO_GROUPS_KEY, JSON.stringify(groups));
+        return write(CRYPTO_GROUPS_KEY, groups);
     },
     loadFavoritePairs() {
         const pairs = read(FAVORITE_PAIRS_KEY, []);
@@ -112,7 +148,7 @@ export const converterStorage = {
             .map(({ from, to }) => ({ from, to }));
     },
     saveFavoritePairs(pairs) {
-        localStorage.setItem(FAVORITE_PAIRS_KEY, JSON.stringify(pairs));
+        return write(FAVORITE_PAIRS_KEY, pairs);
     },
     loadConversionHistory() {
         const entries = read(CONVERSION_HISTORY_KEY, []);
@@ -124,17 +160,17 @@ export const converterStorage = {
         const entries = [sanitizeHistoryEntry(entry), ...this.loadConversionHistory()]
             .filter(Boolean)
             .slice(0, HISTORY_LIMIT);
-        localStorage.setItem(CONVERSION_HISTORY_KEY, JSON.stringify(entries));
+        write(CONVERSION_HISTORY_KEY, entries);
 
         return entries;
     },
     removeConversionHistoryEntry(id) {
         const entries = this.loadConversionHistory().filter((entry) => entry.id !== id);
-        localStorage.setItem(CONVERSION_HISTORY_KEY, JSON.stringify(entries));
+        write(CONVERSION_HISTORY_KEY, entries);
 
         return entries;
     },
     clearConversionHistory() {
-        localStorage.removeItem(CONVERSION_HISTORY_KEY);
+        return write(CONVERSION_HISTORY_KEY);
     },
 };

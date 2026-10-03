@@ -50,10 +50,10 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         $ohlc = $this->first($this->request('OHLC', $params + ['interval' => $interval]));
         $ticker = $this->first($this->request('Ticker', $params));
         $depth = $this->first($this->request('Depth', $params + ['count' => 10]));
+        array_pop($ohlc);
         $candles = array_values(array_filter($ohlc, $this->isValidCandle(...)));
         usort($candles, static fn (array $left, array $right): int => (int) $left[0] <=> (int) $right[0]);
 
-        array_pop($candles); // Kraken always includes the unfinished current candle.
         $candles = array_slice($candles, -60); // The client renders the same 60-candle window it labels.
 
         return [
@@ -166,7 +166,7 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         $time = (float) $candle[0];
         $prices = array_map(static fn (mixed $price): float => is_numeric($price) ? (float) $price : NAN, array_slice($candle, 1, 4));
 
-        if (! is_finite($time) || $time <= 0 || floor($time) !== $time || $time > PHP_INT_MAX) {
+        if (! is_finite($time) || $time <= 0 || floor($time) !== $time || $time > min(PHP_INT_MAX, 9_007_199_254_740_991)) {
             return false;
         }
 

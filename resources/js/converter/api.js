@@ -6,14 +6,23 @@ function batches(values) {
 }
 
 async function request(url, options = {}) {
-    const response = await fetch(url, options);
-    const payload = await response.json();
+    const response = await fetch(url, { ...options, headers: { Accept: 'application/json', ...options.headers } });
+    let payload;
+    try {
+        payload = await response.json();
+    } catch {
+        payload = null;
+    }
+    const validPayload = payload !== null && typeof payload === 'object' && !Array.isArray(payload);
 
-    if (!response.ok) {
-        const error = new Error(payload.message || 'Request failed');
-        error.code = payload.code;
-        error.provider = payload.provider;
-        error.retryAfter = payload.retryAfter;
+    if (!response.ok || !validPayload) {
+        const error = new Error(validPayload && typeof payload.message === 'string'
+            ? payload.message : 'Не удалось получить ответ сервера. Попробуйте ещё раз.');
+        error.code = validPayload ? payload.code : 'invalid_response';
+        error.provider = validPayload ? payload.provider : undefined;
+        error.retryAfter = validPayload ? payload.retryAfter : undefined;
+        const retryAfter = response.headers?.get('Retry-After');
+        if (error.retryAfter === undefined && /^\d+$/.test(retryAfter || '')) error.retryAfter = Number(retryAfter);
         error.status = response.status;
         throw error;
     }

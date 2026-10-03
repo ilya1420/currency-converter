@@ -42,16 +42,17 @@ export const calculatorMethods = {
         }
         this.displayAmount = this.amount;
         this.previewCalculation();
+        this.save?.();
     },
     backspace() {
         this.isFreshInput = false;
-        this.amount = this.amount.slice(0, -1) || '0'; this.displayAmount = this.amount; this.previewCalculation();
+        this.amount = this.amount.slice(0, -1) || '0'; this.displayAmount = this.amount; this.previewCalculation(); this.save?.();
     },
-    clear() { this.amount = '0'; this.displayAmount = '0'; this.isFreshInput = true; this.previewCalculation(); },
+    clear() { this.amount = '0'; this.displayAmount = '0'; this.isFreshInput = true; this.previewCalculation(); this.save?.(); },
     calculate() {
         try {
             this.amount = fractionToDecimal(parseExpression(this.amount), this.inputFractionDigits());
-            this.displayAmount = this.amount; this.isFreshInput = true; this.recalculate();
+            this.displayAmount = this.amount; this.isFreshInput = true; this.recalculate(); this.save?.();
         } catch { this.message = 'Проверьте выражение.'; }
         this.buzz();
     },
