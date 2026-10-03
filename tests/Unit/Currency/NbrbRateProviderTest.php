@@ -12,6 +12,7 @@ use App\Currency\Providers\NbrbRateProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
@@ -237,5 +238,37 @@ class NbrbRateProviderTest extends TestCase
     private function fixture(string $name): string
     {
         return (string) file_get_contents(base_path("tests/Fixtures/nbrb/{$name}"));
+    }
+
+    #[DataProvider('invalidRateData')]
+    public function test_it_rejects_invalid_rate_or_scale(mixed $officialRate, mixed $scale): void
+    {
+        $this->travelTo('2026-09-24 12:00:00');
+        Http::preventStrayRequests();
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([[
+            'Cur_Abbreviation' => 'USD', 'Date' => '2026-09-24T00:00:00',
+            'Cur_OfficialRate' => $officialRate, 'Cur_Scale' => $scale,
+        ]])]);
+
+        $this->expectException(ProviderResponseException::class);
+        try {
+            $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        } finally {
+            Http::assertSentCount(1);
+        }
+    }
+
+    /** @return array<string, array{mixed, mixed}> */
+    public static function invalidRateData(): array
+    {
+        return [
+            'array rate' => [[3.12], 1], 'boolean rate' => [true, 1],
+            'missing rate' => [null, 1], 'garbage rate' => ['oops', 1],
+            'zero rate' => [0, 1], 'negative rate' => [-3.12, 1],
+            'double negative' => [-3.12, -1], 'negative scale' => [3.12, -1],
+            'zero scale' => [3.12, 0], 'array scale' => [3.12, [1]],
+            'boolean scale' => [3.12, true], 'missing scale' => [3.12, null],
+            'excessive exponent' => ['1e1024', 1], 'fraction' => ['1/2', 1],
+        ];
     }
 }

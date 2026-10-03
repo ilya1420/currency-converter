@@ -54,18 +54,32 @@ final class CoinGeckoRateProvider implements RateProviderInterface
                         throw new ProviderResponseException('CoinGecko returned an invalid price.');
                     }
 
-                    return ['payload' => $response->json(), 'fetchedAt' => now()->toIso8601String()];
+                    $payload = $response->json();
+                    $this->price($payload, $coinGeckoId);
+
+                    return ['payload' => $payload, 'fetchedAt' => now()->toIso8601String()];
                 },
             );
         } catch (ConnectionException $exception) {
             throw new ProviderException('CoinGecko is unavailable.', previous: $exception);
         }
-        $payload = $cached['payload'] ?? [];
-        $price = $payload[$from->coinGeckoId]['usd'] ?? null;
-        if (! is_numeric($price)) {
-            throw new ProviderException('CoinGecko returned an invalid price.');
+        try {
+            $price = $this->price($cached['payload'] ?? null, $coinGeckoId);
+        } catch (ProviderResponseException $exception) {
+            $this->cache->forget($cacheKey);
+
+            throw $exception;
         }
 
-        return new ExchangeRate($from, $to, (string) $price, RateSource::COINGECKO, new DateTimeImmutable($cached['fetchedAt'] ?? 'now'));
+        return new ExchangeRate($from, $to, $price, RateSource::COINGECKO, new DateTimeImmutable($cached['fetchedAt'] ?? 'now'));
+    }
+
+    private function price(mixed $payload, string $coinGeckoId): string
+    {
+        if (! is_array($payload) || ! is_array($payload[$coinGeckoId] ?? null)) {
+            throw new ProviderResponseException('CoinGecko returned an invalid price.');
+        }
+
+        return ExchangeRate::positiveDecimal($payload[$coinGeckoId]['usd'] ?? null)->__toString();
     }
 }

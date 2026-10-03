@@ -5,6 +5,7 @@ namespace App\Currency\Repositories;
 use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\RateSource;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Models\StoredExchangeRate;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -91,10 +92,14 @@ final class ExchangeRateRepository
             $isStale = $rateDate->format('Y-m-d') < $today;
         }
 
-        return new ExchangeRate(
-            $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
-            $source, $fetchedAt, $rateDate, $isStale,
-        );
+        try {
+            return new ExchangeRate(
+                $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
+                $source, $fetchedAt, $rateDate, $isStale,
+            );
+        } catch (ProviderResponseException) {
+            return null;
+        }
     }
 
     private function storedDate(StoredExchangeRate $stored, string $attribute): ?DateTimeImmutable
