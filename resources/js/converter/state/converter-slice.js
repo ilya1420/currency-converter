@@ -1,4 +1,4 @@
-const row = (id, currency) => ({ id, currency, previousCurrency: currency, result: '', dailyChange: null, error: '', loading: false, swipeOffset: 0 });
+const row = (id, currency) => ({ id, currency, previousCurrency: currency, result: '', dailyChange: null, error: '', loading: false, isStale: false, isFallback: false, rateDate: null, swipeOffset: 0 });
 
 export function converterSlice(catalog) {
     return {

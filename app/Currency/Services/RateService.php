@@ -15,6 +15,7 @@ use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Repositories\ExchangeRateRepository;
 use DateInterval;
 use DateTimeImmutable;
+use DateTimeZone;
 
 final class RateService
 {
@@ -26,6 +27,9 @@ final class RateService
 
     /** @var array<class-string<RateProviderInterface>, ProviderException> */
     private array $providerFailures = [];
+
+    /** @var array<string, true> */
+    private array $refreshedCatalogs = [];
 
     /** @param iterable<RateProviderInterface> $providers */
     public function __construct(
@@ -60,13 +64,11 @@ final class RateService
                 continue;
             }
             $source = $provider->source();
-            $freshAfter = (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->ttl($source).'S'));
-            $latest = $this->rates->findLatest($source, $from, $to);
-            if ($latest !== null && $this->isCurrentOfficialRate($latest)) {
-                return $this->resolvedRates[$key] = $latest;
-            }
-            if (! $forceRefresh && ($fresh = $this->rates->findFresh($source, $from, $to, $freshAfter)) && ($source !== RateSource::NBRB || $fresh->publishedAt === null)) {
-                return $this->resolvedRates[$key] = $fresh;
+            $cached = $this->rates->findLatest($source, $from, $to);
+            $cacheIsFresh = $cached !== null && $this->isFresh($source, $cached);
+            $officialRateIsCurrent = $source === RateSource::NBRB && $cached !== null && $this->isCurrentOfficialRate($cached);
+            if ($cacheIsFresh && (! $forceRefresh || $officialRateIsCurrent)) {
+                return $this->resolvedRates[$key] = $cached;
             }
 
             if (isset($this->providerFailures[$provider::class])) {
@@ -80,8 +82,15 @@ final class RateService
 
             try {
                 $this->refreshAttempts[$key] = true;
+                $refreshProviderCache = $forceRefresh || ! $cacheIsFresh;
+                if ($source === RateSource::NBRB && isset($this->refreshedCatalogs[$source->value])) {
+                    $refreshProviderCache = false;
+                }
+                if ($source === RateSource::NBRB) {
+                    $this->refreshedCatalogs[$source->value] = true;
+                }
 
-                return $this->resolvedRates[$key] = $this->rates->save($provider->getRate($from, $to));
+                return $this->resolvedRates[$key] = $this->rates->save($provider->getRate($from, $to, $refreshProviderCache));
             } catch (ProviderException $exception) {
                 $this->providerFailures[$provider::class] = $exception;
                 $cached = $this->rates->findLatest($source, $from, $to);
@@ -100,11 +109,27 @@ final class RateService
         return (int) config("currency.{$source->value}.rate_ttl_seconds");
     }
 
+    private function isFresh(RateSource $source, ExchangeRate $rate): bool
+    {
+        $now = DateTimeImmutable::createFromInterface(now());
+        $freshAfter = $now->sub(new DateInterval('PT'.$this->ttl($source).'S'));
+        if ($source !== RateSource::NBRB || $rate->rateDate === null) {
+            return $rate->fetchedAt >= $freshAfter;
+        }
+
+        return $this->isCurrentOfficialRate($rate);
+    }
+
     private function isCurrentOfficialRate(ExchangeRate $rate): bool
     {
-        return $rate->source === RateSource::NBRB
-            && $rate->publishedAt !== null
-            && $rate->publishedAt->setTimezone(new \DateTimeZone('Europe/Minsk'))->format('Y-m-d') === now('Europe/Minsk')->format('Y-m-d');
+        if ($rate->source !== RateSource::NBRB || $rate->rateDate === null) {
+            return false;
+        }
+
+        $timezone = new DateTimeZone('Europe/Minsk');
+        $today = DateTimeImmutable::createFromInterface(now())->setTimezone($timezone)->format('Y-m-d');
+
+        return $rate->rateDate->setTimezone($timezone)->format('Y-m-d') === $today;
     }
 
     private function fallback(ExchangeRate $rate, ProviderException $exception): ExchangeRate
@@ -115,7 +140,17 @@ final class RateService
             default => 'provider_unavailable',
         };
 
-        return new ExchangeRate($rate->from, $rate->to, $rate->rate, $rate->source, $rate->fetchedAt, $rate->publishedAt, ! $this->isCurrentOfficialRate($rate), $reason);
+        return new ExchangeRate(
+            $rate->from,
+            $rate->to,
+            $rate->rate,
+            $rate->source,
+            $rate->fetchedAt,
+            $rate->rateDate,
+            $rate->source === RateSource::NBRB ? ! $this->isCurrentOfficialRate($rate) : true,
+            $reason,
+            true,
+        );
     }
 
     private function maxStaleAge(RateSource $source): int

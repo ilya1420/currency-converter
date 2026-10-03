@@ -216,7 +216,7 @@ class RateServiceTest extends TestCase
                 return $from->code === 'USD' && $to->code === 'BYN';
             }
 
-            public function getRate(Currency $from, Currency $to): ExchangeRate
+            public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
             {
                 $this->calls++;
                 if ($this->exception) {

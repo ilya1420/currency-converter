@@ -89,6 +89,7 @@ return [
         'base_url' => env('NBRB_API_BASE_URL', 'https://api.nbrb.by/exrates'),
         'rate_ttl_seconds' => (int) env('NBRB_RATE_TTL_SECONDS', 21600),
         'max_stale_age_seconds' => (int) env('NBRB_MAX_STALE_AGE_SECONDS', 604800),
+        'fallback_is_stale' => true,
         'http' => [
             'retry_attempts' => 2,
         ],
