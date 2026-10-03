@@ -15,6 +15,6 @@ final class DailyChangeController
             'currencies.*' => ['regex:/^[A-Z0-9]{2,10}$/'],
         ]);
 
-        return response()->json(['changes' => $changes->forCurrencies($data['currencies'])]);
+        return response()->json($changes->snapshot($data['currencies']));
     }
 }

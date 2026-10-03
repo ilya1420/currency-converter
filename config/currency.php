@@ -85,6 +85,10 @@ return [
     'catalog' => [
         'popular_limit' => (int) env('CURRENCY_POPULAR_LIMIT', 25),
     ],
+    'daily_changes' => [
+        'failure_cooldown_seconds' => 30,
+        'missing_data_ttl_seconds' => 60,
+    ],
     'nbrb' => [
         'base_url' => env('NBRB_API_BASE_URL', 'https://api.nbrb.by/exrates'),
         'rate_ttl_seconds' => (int) env('NBRB_RATE_TTL_SECONDS', 21600),

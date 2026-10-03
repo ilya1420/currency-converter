@@ -24,6 +24,71 @@ test('long conversion and daily-change lists are split into twenty-item batches'
     } finally { globalThis.fetch = originalFetch; }
 });
 
+test('daily-change status metadata is retained across twenty-item batches', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+        const codes = new URL(url, 'http://localhost').searchParams.getAll('currencies[]');
+        return new Response(JSON.stringify({
+            changes: Object.fromEntries(codes.map(code => [code, null])),
+            statuses: Object.fromEntries(codes.map(code => [code, { status: 'error', code: 'provider_rate_limited', provider: 'kraken', retryAfter: 45 }])),
+        }));
+    };
+    try {
+        const result = await currencyApi.dailyChanges(Array.from({ length: 21 }, (_, index) => `C${index}`));
+        assert.equal(Object.keys(result.statuses).length, 21);
+        assert.equal(result.statuses.C20.retryAfter, 45);
+        assert.equal(result.statuses.C0.provider, 'kraken');
+    } finally { globalThis.fetch = originalFetch; }
+});
+
+test('daily-change failures have their own label and preserve conversion state', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        changes: { EUR: null },
+        statuses: { EUR: { status: 'error', code: 'provider_rate_limited', provider: 'nbrb', retryAfter: 45 } },
+    }));
+    try {
+        const state = conversionState();
+        state.rows[1].result = '92';
+        state.rows[1].isStale = false;
+        await state.loadDailyChanges(0, ['EUR']);
+        assert.equal(state.dailyChangeStatusLabel(state.rows[1]), 'Лимит данных');
+        assert.equal(state.rows[1].result, '92');
+        assert.equal(state.rows[1].isStale, false);
+        assert.equal(state.message, '');
+        assert.equal(state.rows[1].dailyChangeStatus.retryAfter, 45);
+    } finally { globalThis.fetch = originalFetch; }
+});
+
+test('missing daily data and transport failures are distinguishable without blocking rates', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ changes: { EUR: null }, statuses: { EUR: { status: 'unavailable' } } }));
+    try {
+        const state = conversionState();
+        await state.loadDailyChanges(0, ['EUR']);
+        assert.equal(state.dailyChangeStatusLabel(state.rows[1]), 'Нет данных');
+        globalThis.fetch = async () => { throw new Error('offline'); };
+        await state.loadDailyChanges(0, ['EUR']);
+        assert.equal(state.dailyChangeStatusLabel(state.rows[1]), 'Сбой данных');
+        assert.equal(state.message, '');
+    } finally { globalThis.fetch = originalFetch; }
+});
+
+test('a late daily-change failure does not overwrite the new provider status', async () => {
+    const originalFetch = globalThis.fetch;
+    let fail;
+    globalThis.fetch = () => new Promise((resolve, reject) => { fail = reject; });
+    try {
+        const state = conversionState();
+        const pending = state.loadDailyChanges(0, ['EUR']);
+        state.requestToken++;
+        state.rows[1].dailyChangeStatus = { status: 'available', provider: 'new' };
+        fail(new Error('old source failed'));
+        await pending;
+        assert.equal(state.rows[1].dailyChangeStatus.provider, 'new');
+    } finally { globalThis.fetch = originalFetch; }
+});
+
 function conversionState() {
     const state = {
         base: 'USD', amount: '100', displayAmount: '100',

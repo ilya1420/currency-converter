@@ -25,9 +25,9 @@ class ConversionEndpointTest extends TestCase
 
         $this->postJson('/conversion', ['amount' => '1', 'from' => 'USD', 'to' => 'BYN'])
             ->assertServiceUnavailable()
-            ->assertJsonPath('code', 'provider_unavailable')
+            ->assertJsonPath('code', 'provider_timeout')
             ->assertJsonPath('provider', 'nbrb')
-            ->assertJsonPath('message', 'НБРБ временно недоступен. Попробуйте позже.');
+            ->assertJsonPath('message', 'НБРБ не ответил вовремя. Попробуйте позже.');
     }
 
     public function test_a_corrupted_saved_rate_date_returns_503_when_the_provider_is_offline(): void
@@ -44,7 +44,7 @@ class ConversionEndpointTest extends TestCase
 
         $this->postJson('/conversion', ['amount' => '1', 'from' => 'USD', 'to' => 'BYN'])
             ->assertServiceUnavailable()
-            ->assertJsonPath('code', 'provider_unavailable')
+            ->assertJsonPath('code', 'provider_timeout')
             ->assertJsonPath('provider', 'nbrb');
 
         $this->assertDatabaseHas('exchange_rates', ['published_at' => 'not-a-date', 'rate' => '3.12']);

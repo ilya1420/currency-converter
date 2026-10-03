@@ -7,7 +7,11 @@ use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\ProviderCapability;
 use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\ProviderResponseException;
+use App\Currency\Exceptions\ProviderTimeoutException;
+use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
+use App\Http\Presenters\ConversionFailurePresenter;
 use Illuminate\Http\Client\ConnectionException;
 
 final class DailyChangeService
@@ -26,41 +30,61 @@ final class DailyChangeService
     /** @param list<string> $codes @return array<string, ?float> */
     public function forCurrencies(array $codes): array
     {
-        $changes = [];
+        return $this->snapshot($codes)['changes'];
+    }
+
+    /**
+     * @param  list<string>  $codes
+     * @return array{changes: array<string, ?float>, statuses: array<string, array{status: string, code: ?string, provider: ?string, message: ?string, retryAfter: ?int}>}
+     */
+    public function snapshot(array $codes): array
+    {
+        $results = [];
         $pending = [];
+        $selectionIds = [];
 
         foreach (array_unique($codes) as $code) {
+            $currency = null;
             try {
                 $currency = $this->catalog->resolve($code);
                 if ($currency->code === 'BYN') {
-                    $changes[$code] = null;
+                    $results[$code] = $this->unavailable('unsupported_asset');
 
                     continue;
                 }
 
                 $capability = $this->capabilityFor($currency);
-                $key = $this->cacheKey($currency, $this->selections->cacheIdentity($capability));
+                $selectionIds[$code] = $this->selections->cacheIdentity($capability);
+                $key = $this->cacheKey($currency, $selectionIds[$code]);
                 if (($cached = $this->cache->get($key)) !== null) {
-                    $changes[$code] = $cached;
+                    $results[$code] = $cached;
 
                     continue;
                 }
-
                 $pending[$code] = $currency;
-            } catch (ProviderException|UnsupportedCurrencyPairException) {
-                $changes[$code] = null;
+            } catch (UnsupportedCurrencyPairException) {
+                $results[$code] = $this->unavailable('unsupported_asset');
+            } catch (ProviderException $exception) {
+                $providerId = $currency === null ? null : $this->selections->configured($this->capabilityFor($currency))?->id;
+                $results[$code] = $this->failure($exception, $providerId);
             }
         }
 
         foreach ([CurrencyType::FIAT, CurrencyType::CRYPTO] as $type) {
             $capability = $this->capabilityForType($type);
             $configured = $this->selections->configured($capability);
-            if (array_filter($pending, static fn (Currency $currency): bool => $currency->type === $type) === []) {
+            $currencies = array_filter($pending, static fn (Currency $currency): bool => $currency->type === $type);
+            if ($currencies === []) {
                 continue;
             }
             try {
                 $providers = $this->selections->candidates($capability, $this->providerList());
-            } catch (ProviderException) {
+            } catch (ProviderException $exception) {
+                foreach ($currencies as $currency) {
+                    $results[$currency->code] = $this->failure($exception, $configured?->id);
+                    unset($pending[$currency->code]);
+                }
+
                 continue;
             }
 
@@ -69,12 +93,35 @@ final class DailyChangeService
                 if ($supported === []) {
                     continue;
                 }
+                $providerId = $this->selections->definitionForAdapter($provider::class)?->id;
+                $identity = $this->selections->cacheIdentity($capability);
+                $failureKey = 'daily-change:failure:v1:'.$capability->value.':'.$identity.':'.($providerId ?? $provider::class);
+                $failure = $this->cache->get($failureKey);
+                if ($failure !== null) {
+                    $failure['status']['retryAfter'] = max(0, $failure['retryAt'] - now()->getTimestamp());
+                } else {
+                    try {
+                        $fresh = $provider->dailyChanges($supported);
+                        foreach ($fresh as $change) {
+                            if ($change !== null && ((! is_int($change) && ! is_float($change)) || ! is_finite($change))) {
+                                throw new ProviderResponseException('Invalid daily change.');
+                            }
+                        }
+                    } catch (ConnectionException|ProviderException $exception) {
+                        $failure = $this->failure($exception, $providerId);
+                        $seconds = max(1, (int) config('currency.daily_changes.failure_cooldown_seconds', 30), $failure['status']['retryAfter'] ?? 0);
+                        $failure['status']['retryAfter'] = $seconds;
+                        $failure['retryAt'] = now()->getTimestamp() + $seconds;
+                        $this->cache->put($failureKey, $failure, $seconds);
+                    } catch (UnsupportedCurrencyPairException) {
+                        $fresh = [];
+                    }
+                }
 
-                try {
-                    $fresh = $provider->dailyChanges($supported);
-                } catch (ConnectionException|ProviderException|UnsupportedCurrencyPairException) {
+                if ($failure !== null) {
+                    unset($failure['retryAt']);
                     foreach ($supported as $currency) {
-                        $changes[$currency->code] = null;
+                        $results[$currency->code] = $failure;
                         unset($pending[$currency->code]);
                     }
 
@@ -83,28 +130,58 @@ final class DailyChangeService
 
                 foreach ($supported as $currency) {
                     $change = $fresh[$currency->code] ?? null;
-                    $changes[$currency->code] = $change;
-                    if ($change !== null) {
-                        $selectionId = $this->selections->cacheIdentity($capability);
-                        $this->cache->put($this->cacheKey($currency, $selectionId), $change, $this->ttl($currency));
-                        unset($pending[$currency->code]);
-                    } elseif ($configured !== null) {
+                    $result = $change === null ? $this->unavailable('no_data', $providerId) : [
+                        'change' => (float) $change,
+                        'status' => ['status' => 'available', 'code' => null, 'provider' => $providerId, 'message' => null, 'retryAfter' => null],
+                    ];
+                    $results[$currency->code] = $result;
+                    if ($change !== null || $configured !== null) {
+                        $this->cache->put($this->cacheKey($currency, $identity), $result,
+                            $change !== null ? $this->ttl($currency) : (int) config('currency.daily_changes.missing_data_ttl_seconds', 60));
                         unset($pending[$currency->code]);
                     }
                 }
             }
         }
 
-        foreach (array_keys($pending) as $code) {
-            $changes[$code] = null;
+        foreach ($pending as $code => $currency) {
+            $result = $results[$code] ?? $this->unavailable('unsupported_asset');
+            $results[$code] = $result;
+            $this->cache->put($this->cacheKey($currency, $selectionIds[$code]), $result, (int) config('currency.daily_changes.missing_data_ttl_seconds', 60));
         }
 
-        return $changes;
+        return [
+            'changes' => array_map(static fn (array $result): ?float => $result['change'], $results),
+            'statuses' => array_map(static fn (array $result): array => $result['status'], $results),
+        ];
+    }
+
+    /** @return array{change: null, status: array{status: string, code: string, provider: ?string, message: string, retryAfter: null}} */
+    private function unavailable(string $code, ?string $provider = null): array
+    {
+        return ['change' => null, 'status' => [
+            'status' => 'unavailable', 'code' => $code, 'provider' => $provider,
+            'message' => 'Дневное изменение для этой валюты недоступно.', 'retryAfter' => null,
+        ]];
+    }
+
+    /** @return array{change: null, status: array{status: string, code: string, provider: ?string, message: string, retryAfter: ?int}} */
+    private function failure(ProviderException|ConnectionException $exception, ?string $provider): array
+    {
+        if ($exception instanceof ConnectionException) {
+            $exception = new ProviderTimeoutException('Daily change request timed out.', $exception);
+        }
+        $failure = (new ConversionFailurePresenter)->present(new RateUnavailableException('Daily change is unavailable.', $provider, previous: $exception));
+
+        return ['change' => null, 'status' => [
+            'status' => 'error', 'code' => $failure['code'], 'provider' => $provider,
+            'message' => $failure['message'], 'retryAfter' => $failure['retryAfter'],
+        ]];
     }
 
     private function cacheKey(Currency $currency, string $selectionId): string
     {
-        return "daily-change:v4:{$selectionId}:{$currency->type->value}:{$currency->code}";
+        return "daily-change:v5:{$selectionId}:{$currency->type->value}:{$currency->code}";
     }
 
     private function capabilityFor(Currency $currency): ProviderCapability

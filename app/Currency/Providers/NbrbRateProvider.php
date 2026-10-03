@@ -7,8 +7,6 @@ use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\RateSource;
-use App\Currency\Exceptions\ProviderException;
-use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\DecimalCalculator;
@@ -17,8 +15,6 @@ use Brick\Math\Exception\MathException;
 use Brick\Math\RoundingMode;
 use DateTimeImmutable;
 use DateTimeZone;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
 use Throwable;
 
 final class NbrbRateProvider implements RateProviderInterface
@@ -49,16 +45,12 @@ final class NbrbRateProvider implements RateProviderInterface
             throw new UnsupportedCurrencyPairException("NBRB does not support {$from->code}/{$to->code}.");
         }
 
-        try {
-            $records = $this->catalog($forceRefresh);
-        } catch (ConnectionException $exception) {
-            throw new ProviderException('NBRB is unavailable.', previous: $exception);
-        }
+        $records = $this->catalog($forceRefresh);
 
         $record = $this->findCurrency($records, $from);
 
         if ($record === null) {
-            throw new ProviderException("NBRB did not return {$from->code}.");
+            throw new ProviderResponseException("NBRB did not return {$from->code}.");
         }
 
         $rate = $this->normalizeRate($record);
@@ -81,11 +73,6 @@ final class NbrbRateProvider implements RateProviderInterface
         );
     }
 
-    private function request(): PendingRequest
-    {
-        return ($this->clients ??= app(ExternalApiClientFactory::class))->for('nbrb');
-    }
-
     /** @return array<mixed> */
     private function catalog(bool $forceRefresh = false): array
     {
@@ -94,11 +81,8 @@ final class NbrbRateProvider implements RateProviderInterface
             return $this->catalog;
         }
 
-        $response = $this->request()->get('rates', ['periodicity' => 0]);
-        if ($response->status() === 429) {
-            throw new ProviderRateLimitException('NBRB rate limit reached.', is_numeric($response->header('Retry-After')) ? (int) $response->header('Retry-After') : null);
-        }
-        if ($response->failed() || ! is_array($response->json())) {
+        $response = ($this->clients ??= app(ExternalApiClientFactory::class))->get('nbrb', 'rates', ['periodicity' => 0]);
+        if (! is_array($response->json())) {
             throw new ProviderResponseException("NBRB returned HTTP {$response->status()}.");
         }
 

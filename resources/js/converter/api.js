@@ -47,12 +47,15 @@ export const currencyApi = {
     },
     async dailyChanges(currencies) {
         const changes = {};
+        const statuses = {};
         for (const batch of batches(currencies)) {
             const query = new URLSearchParams();
             batch.forEach((currency) => query.append('currencies[]', currency));
-            Object.assign(changes, (await request(`/daily-changes?${query.toString()}`)).changes);
+            const result = await request(`/daily-changes?${query.toString()}`);
+            Object.assign(changes, result.changes);
+            Object.assign(statuses, result.statuses);
         }
-        return { changes };
+        return { changes, statuses };
     },
     conversion({ from, fromType, to, toType, refresh }) {
         return request('/conversion', {

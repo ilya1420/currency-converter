@@ -98,7 +98,10 @@ export const conversionMethods = {
     async loadDailyChanges(token, currencies) {
         const targets = [...new Set(currencies.filter((currency) => currency !== this.base))];
         this.rows.forEach((row) => {
-            if (targets.includes(row.currency)) row.dailyChange = null;
+            if (targets.includes(row.currency) || row.currency === this.base) {
+                row.dailyChange = null;
+                row.dailyChangeStatus = null;
+            }
         });
 
         if (!targets.length) return;
@@ -110,11 +113,28 @@ export const conversionMethods = {
             this.rows.forEach((row) => {
                 if (Object.hasOwn(data.changes ?? {}, row.currency)) {
                     row.dailyChange = data.changes[row.currency];
+                    row.dailyChangeStatus = data.statuses?.[row.currency] || null;
                 }
             });
-        } catch {
-            // Daily changes are optional market data and must not affect conversion.
+        } catch (error) {
+            if (token !== this.requestToken) return;
+            this.rows.forEach((row) => {
+                if (targets.includes(row.currency)) {
+                    row.dailyChangeStatus = {
+                        status: 'error', code: error.code || 'provider_unavailable',
+                        message: error.message || 'Не удалось получить дневное изменение.',
+                        provider: error.provider || null, retryAfter: error.retryAfter ?? null,
+                    };
+                }
+            });
         }
+    },
+    dailyChangeStatusLabel(row) {
+        if (row.currency === this.base || row.currency === 'BYN') return '';
+        if (row.dailyChangeStatus?.status === 'error') {
+            return row.dailyChangeStatus.code === 'provider_rate_limited' ? 'Лимит данных' : 'Сбой данных';
+        }
+        return row.dailyChangeStatus?.status === 'unavailable' ? 'Нет данных' : '';
     },
     async loadRow(row, refresh = false, token = this.requestToken) {
         if (this.providerSettingsSaving && !refresh) return;
@@ -126,6 +146,7 @@ export const conversionMethods = {
         if (row.currency === this.base) {
             row.result = this.amount;
             row.dailyChange = null;
+            row.dailyChangeStatus = null;
             return;
         }
         void this.loadDailyChanges(token, [row.currency]);

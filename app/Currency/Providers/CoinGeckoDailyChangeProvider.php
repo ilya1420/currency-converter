@@ -5,16 +5,12 @@ namespace App\Currency\Providers;
 use App\Currency\Contracts\DailyChangeProviderInterface;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
-use App\Currency\Exceptions\ProviderException;
-use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
-use App\Currency\Services\CurrencyCache;
 use App\Currency\Services\ExternalApiClientFactory;
-use Illuminate\Http\Client\ConnectionException;
 
 final class CoinGeckoDailyChangeProvider implements DailyChangeProviderInterface
 {
-    public function __construct(private CurrencyCache $cache, private ExternalApiClientFactory $clients) {}
+    public function __construct(private ExternalApiClientFactory $clients) {}
 
     public function supports(Currency $currency): bool
     {
@@ -35,41 +31,26 @@ final class CoinGeckoDailyChangeProvider implements DailyChangeProviderInterface
             return [];
         }
 
-        $ids = array_values($assets);
-        sort($ids);
-        try {
-            $cached = $this->cache->remember(
-                'coingecko:daily-change:v1:'.sha1(implode(',', $ids)),
-                now()->addMinutes(15),
-                function () use ($ids): array {
-                    $response = $this->clients->for('coingecko')->get('simple/price', [
-                        'ids' => implode(',', $ids),
-                        'vs_currencies' => 'usd',
-                        'include_24hr_change' => 'true',
-                    ]);
-                    if ($response->status() === 429) {
-                        throw new ProviderRateLimitException('CoinGecko rate limit reached.', is_numeric($response->header('Retry-After')) ? (int) $response->header('Retry-After') : null);
-                    }
-                    if ($response->failed() || ! is_array($response->json())) {
-                        throw new ProviderResponseException('CoinGecko daily changes are unavailable.');
-                    }
-
-                    return $response->json();
-                },
-            );
-        } catch (ConnectionException $exception) {
-            throw new ProviderException('CoinGecko daily changes are unavailable.', previous: $exception);
-        }
-
-        $payload = $cached;
+        $response = $this->clients->get('coingecko', 'simple/price', [
+            'ids' => implode(',', array_values($assets)),
+            'vs_currencies' => 'usd',
+            'include_24hr_change' => 'true',
+        ]);
+        $payload = $response->json();
         if (! is_array($payload)) {
-            throw new ProviderException('CoinGecko daily changes are unavailable.');
+            throw new ProviderResponseException('CoinGecko daily changes are unavailable.');
         }
 
         $changes = [];
         foreach ($assets as $code => $id) {
+            if (isset($payload[$id]) && ! is_array($payload[$id])) {
+                throw new ProviderResponseException('CoinGecko returned invalid daily changes.');
+            }
             $change = $payload[$id]['usd_24h_change'] ?? null;
-            $changes[$code] = is_numeric($change) ? (float) $change : null;
+            if ($change !== null && (! is_numeric($change) || ! is_finite((float) $change))) {
+                throw new ProviderResponseException('CoinGecko returned invalid daily changes.');
+            }
+            $changes[$code] = $change === null ? null : (float) $change;
         }
 
         return $changes;
