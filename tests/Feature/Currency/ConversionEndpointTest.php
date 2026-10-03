@@ -31,7 +31,10 @@ class ConversionEndpointTest extends TestCase
     public function test_it_uses_a_saved_rate_when_offline(): void
     {
         (new ExchangeRateRepository)->save(new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), '3.12', RateSource::NBRB, (new DateTimeImmutable)->modify('-7 hours')));
-        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json'))]);
+        Http::fake([
+            'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response($this->fixture('nbrb-usd.json')),
+            'https://api.kraken.com/0/public/AssetPairs*' => Http::response(['error' => [], 'result' => []]),
+        ]);
         $this->getJson('/currencies')->assertOk();
         Http::fake(static fn (): never => throw new ConnectionException('offline'));
 

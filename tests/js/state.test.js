@@ -5,6 +5,25 @@ import { createConverterState } from '../../resources/js/converter/state.js';
 import { converterStorage } from '../../resources/js/converter/storage.js';
 import { currencyApi } from '../../resources/js/converter/api.js';
 
+test('catalog fallback preserves assets and exposes a separate warning without persisting it as fresh', async () => {
+    const originalRequest = currencyApi.catalog;
+    const originalSave = converterStorage.saveCatalog;
+    let saves = 0;
+    currencyApi.catalog = async () => ({ currencies: [{ code: 'BTC', type: 'crypto' }], isComplete: false, isFallback: true, message: 'Сохранённый каталог' });
+    converterStorage.saveCatalog = () => { saves++; };
+    try {
+        const state = createConverterState([]);
+        await state.loadCatalog();
+        assert.equal(state.currencies.includes('BTC'), true);
+        assert.equal(state.catalogMessage, 'Сохранённый каталог');
+        assert.equal(saves, 0);
+        await assert.rejects(state.loadCatalog(true), /Сохранённый каталог/);
+    } finally {
+        currencyApi.catalog = originalRequest;
+        converterStorage.saveCatalog = originalSave;
+    }
+});
+
 test('layout restoration keeps saved currencies even when catalog is incomplete', () => {
     const values = new Map([
         ['currency-converter-layout', JSON.stringify({

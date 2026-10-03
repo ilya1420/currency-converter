@@ -10,6 +10,16 @@ class ProviderSettingsEndpointTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_settings_default_skips_a_provider_with_a_missing_required_key(): void
+    {
+        config(['currency.providers.registry.kraken.requires_api_key' => true]);
+
+        $this->getJson('/provider-settings')
+            ->assertOk()
+            ->assertJsonPath('capabilities.crypto_rates.default', 'coingecko')
+            ->assertJsonPath('capabilities.crypto_market_data.default', null);
+    }
+
     public function test_settings_endpoint_lists_available_rate_providers_and_defaults(): void
     {
         $this->getJson('/provider-settings')

@@ -39,8 +39,7 @@ final class DailyChangeService
                 }
 
                 $capability = $this->capabilityFor($currency);
-                $configured = $this->selections->configured($capability);
-                $key = $this->cacheKey($currency, $configured?->id ?? 'automatic');
+                $key = $this->cacheKey($currency, $this->selections->cacheIdentity($capability));
                 if (($cached = $this->cache->get($key)) !== null) {
                     $changes[$code] = $cached;
 
@@ -56,13 +55,16 @@ final class DailyChangeService
         foreach ([CurrencyType::FIAT, CurrencyType::CRYPTO] as $type) {
             $capability = $this->capabilityForType($type);
             $configured = $this->selections->configured($capability);
-            $providers = $configured === null ? $this->providerList() : $this->selectedProvider($configured->adapterFor($capability));
+            if (array_filter($pending, static fn (Currency $currency): bool => $currency->type === $type) === []) {
+                continue;
+            }
+            try {
+                $providers = $this->selections->candidates($capability, $this->providerList());
+            } catch (ProviderException) {
+                continue;
+            }
 
             foreach ($providers as $provider) {
-                if ($configured === null && ! $this->selections->isAvailableForAutomaticSelection($provider::class)) {
-                    continue;
-                }
-
                 $supported = array_values(array_filter($pending, static fn (Currency $currency): bool => $currency->type === $type && $provider->supports($currency)));
                 if ($supported === []) {
                     continue;
@@ -83,7 +85,7 @@ final class DailyChangeService
                     $change = $fresh[$currency->code] ?? null;
                     $changes[$currency->code] = $change;
                     if ($change !== null) {
-                        $selectionId = $configured?->id ?? 'automatic';
+                        $selectionId = $this->selections->cacheIdentity($capability);
                         $this->cache->put($this->cacheKey($currency, $selectionId), $change, $this->ttl($currency));
                         unset($pending[$currency->code]);
                     } elseif ($configured !== null) {
@@ -102,7 +104,7 @@ final class DailyChangeService
 
     private function cacheKey(Currency $currency, string $selectionId): string
     {
-        return "daily-change:v3:{$selectionId}:{$currency->type->value}:{$currency->code}";
+        return "daily-change:v4:{$selectionId}:{$currency->type->value}:{$currency->code}";
     }
 
     private function capabilityFor(Currency $currency): ProviderCapability
@@ -121,17 +123,6 @@ final class DailyChangeService
         return $this->resolvedProviders ??= is_array($this->providers)
             ? array_values($this->providers)
             : iterator_to_array($this->providers, false);
-    }
-
-    /** @return list<DailyChangeProviderInterface> */
-    private function selectedProvider(?string $adapter): array
-    {
-        $providers = array_values(array_filter($this->providerList(), static fn (DailyChangeProviderInterface $provider): bool => $provider::class === $adapter));
-        if ($adapter === null || $providers === []) {
-            throw new ProviderException('The selected daily-change provider is not available in this application build.');
-        }
-
-        return $providers;
     }
 
     private function ttl(Currency $currency): \DateTimeInterface

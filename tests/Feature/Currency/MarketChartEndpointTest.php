@@ -10,6 +10,22 @@ final class MarketChartEndpointTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_chart_rate_limit_preserves_retry_after_and_safe_error_code(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.kraken.com/0/public/AssetPairs*' => Http::response([
+                'error' => [], 'result' => ['XBTUSD' => ['base' => 'XXBT', 'quote' => 'ZUSD', 'altname' => 'XBTUSD']],
+            ]),
+            'https://api.nbrb.by/exrates/rates*' => Http::response([]),
+            'https://api.coingecko.com/api/v3/coins/markets*' => Http::response([]),
+            'https://api.kraken.com/0/public/OHLC*' => Http::response([], 429, ['Retry-After' => '17']),
+        ]);
+
+        $this->getJson('/market/BTC?type=crypto&interval=60')->assertTooManyRequests()
+            ->assertHeader('Retry-After', '17')->assertJsonPath('code', 'provider_rate_limited');
+    }
+
     public function test_provider_connection_failure_returns_a_safe_503_response(): void
     {
         Http::preventStrayRequests();
@@ -29,7 +45,8 @@ final class MarketChartEndpointTest extends TestCase
 
         $this->getJson('/market/BTC?type=crypto&interval=60')
             ->assertServiceUnavailable()
-            ->assertJson(['message' => 'Market data is temporarily unavailable.'])
+            ->assertJsonPath('code', 'provider_timeout')
+            ->assertJson(['message' => 'Провайдер не ответил вовремя. Попробуйте позже.'])
             ->assertJsonMissing(['message' => 'upstream detail must not be exposed']);
     }
 }
