@@ -4,6 +4,7 @@ import test from 'node:test';
 import { conversionMethods } from '../../resources/js/converter/conversion.js';
 import { currencyApi } from '../../resources/js/converter/api.js';
 import { createConverterState } from '../../resources/js/converter/state.js';
+import { calculatorMethods } from '../../resources/js/converter/calculator.js';
 
 test('long conversion and daily-change lists are split into twenty-item batches', async () => {
     const originalFetch = globalThis.fetch;
@@ -244,6 +245,115 @@ test('activating a converted row preserves its amount and recalculates the list'
     assert.equal(state.displayAmount, '92');
     assert.ok(Math.abs(Number(state.rows[0].result) - 100) < 0.000001);
 });
+
+function baseSwitchState(amount) {
+    const state = createConverterState([
+        { code: 'BTC', type: 'crypto' }, { code: 'USD', type: 'fiat' }, { code: 'NEAR', type: 'crypto' },
+    ]);
+    Object.defineProperties(state, Object.getOwnPropertyDescriptors(conversionMethods));
+    Object.defineProperties(state, Object.getOwnPropertyDescriptors(calculatorMethods));
+    state.base = 'BTC';
+    state.amount = state.displayAmount = amount;
+    state.rows = ['BTC', 'USD', 'NEAR'].map(currency => ({ currency, result: '', error: '' }));
+    state.factors = { USD: '84945.1', NEAR: '18257.94734' };
+    state.save = state.buzz = () => {};
+    state.loadAll = () => {};
+    state.recalculate();
+    return state;
+}
+
+for (const [amount, usd, near] of [
+    ['1', '84945.1', '18257.94734'],
+    ['2', '169890.2', '36515.89468'],
+    ['0.125', '10618.1375', '2282.2434175'],
+    ['-1', '-84945.1', '-18257.94734'],
+]) {
+    test(`switching the base preserves exact ${amount} BTC through repeated currency selections`, () => {
+        const state = baseSwitchState(amount);
+
+        for (const currency of ['USD', 'NEAR', 'BTC', 'USD', 'BTC']) {
+            state.activateRow(state.rows.find(row => row.currency === currency));
+            assert.deepEqual(state.rows.map(row => row.result), [amount, usd, near]);
+        }
+
+        assert.equal(state.amount, amount);
+        assert.equal(state.keyboardVisible, true);
+    });
+}
+
+test('editing an amount after a base switch uses the exact ratio of the previous values', () => {
+    const state = baseSwitchState('1');
+    state.activateRow(state.rows[1]);
+
+    state.recalculate('169890.2');
+
+    assert.deepEqual(state.rows.map(row => row.result), ['2', '169890.2', '36515.89468']);
+});
+
+test('opening the calculator for the current base preserves its fractional amount', () => {
+    const state = baseSwitchState('0.125');
+    state.activateRow(state.rows[1]);
+    state.keyboardVisible = false;
+
+    state.activateRow(state.rows[1]);
+
+    assert.equal(state.amount, '10618.1375');
+    assert.equal(state.displayAmount, '10618.1375');
+    assert.equal(state.rows[0].result, '0.125');
+    assert.equal(state.keyboardVisible, true);
+});
+
+test('switching the base with a zero amount keeps all values at zero', () => {
+    const state = baseSwitchState('0');
+
+    state.activateRow(state.rows[1]);
+
+    assert.equal(state.base, 'USD');
+    assert.equal(state.amount, '0');
+    assert.deepEqual(state.rows.map(row => row.result), ['0', '0', '0']);
+});
+
+test('rebasing while another row is still loading does not invent a zero conversion', () => {
+    const state = baseSwitchState('1');
+    state.rows[2].result = '';
+
+    state.activateRow(state.rows[1]);
+
+    assert.equal(state.rows[0].result, '1');
+    assert.equal(state.rows[2].result, '');
+    assert.equal(state.factors.NEAR, undefined);
+});
+
+for (const [factor, expectedRaw, expectedDisplay] of [
+    ['0.333333333333333333', '0.999999999999999999', '1'],
+    ['0.25', '0.75', '0.75'],
+]) {
+    test(`a refreshed factor ${factor} preserves the base amount and displays ${expectedDisplay} BTC`, async () => {
+        const originalConversions = currencyApi.conversions;
+        const originalDailyChanges = currencyApi.dailyChanges;
+        currencyApi.conversions = async () => ({ conversions: {
+            BTC: { factor, sources: ['kraken'], updatedAt: '2026-10-03T12:00:00Z' },
+            NEAR: { factor: '2', sources: ['kraken'], updatedAt: '2026-10-03T12:00:00Z' },
+        } });
+        currencyApi.dailyChanges = async () => ({ changes: {} });
+        try {
+            const state = baseSwitchState('1');
+            state.factors.USD = '3';
+            state.recalculate();
+            state.activateRow(state.rows[1]);
+
+            await state.loadAllRequest(false, ['BTC', 'USD', 'NEAR']);
+
+            assert.equal(state.base, 'USD');
+            assert.equal(state.amount, '3');
+            assert.equal(state.rows[0].result, expectedRaw);
+            assert.equal(state.formatAmount(state.rows[0].result, 'BTC'), expectedDisplay);
+        } finally {
+            currencyApi.conversions = originalConversions;
+            currencyApi.dailyChanges = originalDailyChanges;
+        }
+    });
+}
 
 test('provider switch discards pending conversion and daily-change responses', async () => {
     const originalFetch = globalThis.fetch;
