@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\CurrencyCatalog;
 use App\Currency\Services\MarketChartService;
@@ -31,7 +32,7 @@ final class MarketChartController
             return response()->json($market->chart($asset, $interval));
         } catch (UnsupportedCurrencyPairException) {
             return response()->json(['message' => 'Charts are unavailable for this currency.'], 422);
-        } catch (ProviderException $exception) {
+        } catch (ProviderException|RateUnavailableException $exception) {
             $failure = $failures->present($exception);
             $response = response()->json($failure, $failure['status']);
             if ($failure['retryAfter'] !== null) {

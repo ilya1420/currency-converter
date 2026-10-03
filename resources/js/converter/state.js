@@ -46,7 +46,7 @@ export function createConverterState(catalog) {
             this.factors = {};
             this.sources = [];
             this.lastUpdatedAt = null;
-            this.rows.forEach((item) => { item.loading = false; item.dailyChange = null; });
+            this.rows.forEach((item) => { item.loading = false; item.dailyChange = null; item.dailyChangeStatus = null; });
             this.loading = false;
         },
         async loadCatalog(strict = false) {

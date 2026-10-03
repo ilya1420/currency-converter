@@ -7,14 +7,11 @@ use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\RateSource;
-use App\Currency\Exceptions\ProviderException;
-use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\CurrencyCache;
 use App\Currency\Services\ExternalApiClientFactory;
 use DateTimeImmutable;
-use Illuminate\Http\Client\ConnectionException;
 
 final class CoinGeckoRateProvider implements RateProviderInterface
 {
@@ -40,29 +37,21 @@ final class CoinGeckoRateProvider implements RateProviderInterface
         if ($forceRefresh) {
             $this->cache->forget($cacheKey);
         }
-        try {
-            $cached = $this->cache->remember(
-                $cacheKey,
-                now()->addSeconds((int) config('currency.coingecko.rate_ttl_seconds')),
-                function () use ($coinGeckoId): array {
-                    $request = $this->clients->for('coingecko');
-                    $response = $request->get('simple/price', ['ids' => $coinGeckoId, 'vs_currencies' => 'usd']);
-                    if ($response->status() === 429) {
-                        throw new ProviderRateLimitException('CoinGecko rate limit reached.', is_numeric($response->header('Retry-After')) ? (int) $response->header('Retry-After') : null);
-                    }
-                    if ($response->failed() || ! is_array($response->json())) {
-                        throw new ProviderResponseException('CoinGecko returned an invalid price.');
-                    }
+        $cached = $this->cache->remember(
+            $cacheKey,
+            now()->addSeconds((int) config('currency.coingecko.rate_ttl_seconds')),
+            function () use ($coinGeckoId): array {
+                $response = $this->clients->get('coingecko', 'simple/price', ['ids' => $coinGeckoId, 'vs_currencies' => 'usd']);
+                if (! is_array($response->json())) {
+                    throw new ProviderResponseException('CoinGecko returned an invalid price.');
+                }
 
-                    $payload = $response->json();
-                    $this->price($payload, $coinGeckoId);
+                $payload = $response->json();
+                $this->price($payload, $coinGeckoId);
 
-                    return ['payload' => $payload, 'fetchedAt' => now()->toIso8601String()];
-                },
-            );
-        } catch (ConnectionException $exception) {
-            throw new ProviderException('CoinGecko is unavailable.', previous: $exception);
-        }
+                return ['payload' => $payload, 'fetchedAt' => now()->toIso8601String()];
+            },
+        );
         try {
             $price = $this->price($cached['payload'] ?? null, $coinGeckoId);
         } catch (ProviderResponseException $exception) {

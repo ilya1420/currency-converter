@@ -6,6 +6,8 @@ use App\Currency\Contracts\MarketDataProviderInterface;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\ProviderCapability;
+use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 
 final class MarketChartService
@@ -48,7 +50,15 @@ final class MarketChartService
                 continue;
             }
 
-            return $provider->chart($currency, $interval) + ['source' => $provider->source()];
+            try {
+                return $provider->chart($currency, $interval) + ['source' => $provider->source()];
+            } catch (ProviderException $exception) {
+                throw new RateUnavailableException(
+                    'Market data is unavailable.',
+                    $this->selections->definitionForAdapter($provider::class)?->id,
+                    previous: $exception,
+                );
+            }
         }
         throw new UnsupportedCurrencyPairException('No market data provider supports this asset.');
     }

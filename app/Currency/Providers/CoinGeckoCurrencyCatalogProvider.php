@@ -5,12 +5,9 @@ namespace App\Currency\Providers;
 use App\Currency\Contracts\CurrencyCatalogProviderInterface;
 use App\Currency\DTO\CurrencyDefinition;
 use App\Currency\Enums\CurrencyType;
-use App\Currency\Exceptions\ProviderException;
-use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Services\CurrencyCache;
 use App\Currency\Services\ExternalApiClientFactory;
-use Illuminate\Http\Client\ConnectionException;
 
 /** Supplies names, popularity grouping and CoinGecko IDs for the liquid asset universe. */
 final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderInterface
@@ -25,14 +22,10 @@ final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderI
     /** @return list<CurrencyDefinition> */
     private function fetchCurrencies(): array
     {
-        try {
-            $market = $this->request('coins/markets', ['vs_currency' => 'usd', 'order' => 'market_cap_desc', 'per_page' => 250, 'page' => 1]);
-        } catch (ConnectionException $exception) {
-            throw new ProviderException('CoinGecko currency catalog is unavailable.', previous: $exception);
-        }
+        $market = $this->request('coins/markets', ['vs_currency' => 'usd', 'order' => 'market_cap_desc', 'per_page' => 250, 'page' => 1]);
 
         if (! is_array($market)) {
-            throw new ProviderException('CoinGecko currency catalog is unavailable.');
+            throw new ProviderResponseException('CoinGecko currency catalog is unavailable.');
         }
 
         $currencies = [];
@@ -62,11 +55,8 @@ final class CoinGeckoCurrencyCatalogProvider implements CurrencyCatalogProviderI
     /** @return array<mixed> */
     private function request(string $path, array $query): array
     {
-        $response = $this->clients->for('coingecko')->get($path, $query);
-        if ($response->status() === 429) {
-            throw new ProviderRateLimitException('CoinGecko rate limit reached.', is_numeric($response->header('Retry-After')) ? (int) $response->header('Retry-After') : null);
-        }
-        if ($response->failed() || ! is_array($response->json())) {
+        $response = $this->clients->get('coingecko', $path, $query);
+        if (! is_array($response->json())) {
             throw new ProviderResponseException('CoinGecko currency catalog is unavailable.');
         }
 

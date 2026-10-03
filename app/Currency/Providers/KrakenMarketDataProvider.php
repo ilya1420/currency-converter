@@ -4,15 +4,13 @@ namespace App\Currency\Providers;
 
 use App\Currency\Contracts\DailyChangeProviderInterface;
 use App\Currency\Contracts\MarketDataProviderInterface;
+use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
-use App\Currency\Exceptions\ProviderException;
-use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
-use App\Currency\Exceptions\ProviderTimeoutException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ExternalApiClientFactory;
-use Illuminate\Http\Client\ConnectionException;
+use Brick\Math\RoundingMode;
 
 final class KrakenMarketDataProvider implements DailyChangeProviderInterface, MarketDataProviderInterface
 {
@@ -102,16 +100,30 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         ]);
         $tickers = [];
         foreach ($result as $pair => $ticker) {
-            if (is_array($ticker)) {
-                $tickers[$this->normalizedPair((string) $pair)] = $ticker;
+            if (! is_array($ticker)) {
+                throw new ProviderResponseException('Kraken returned invalid daily changes.');
             }
+            $tickers[$this->normalizedPair((string) $pair)] = $ticker;
         }
 
         foreach ($pairs as $code => $pair) {
             $ticker = $tickers[$this->normalizedPair($pair)] ?? null;
-            $last = (float) ($ticker['c'][0] ?? 0);
-            $open = (float) ($ticker['o'] ?? 0);
-            $changes[$code] = $last > 0 && $open > 0 ? (($last / $open) - 1) * 100 : null;
+            if ($ticker === null || ! isset($ticker['c'], $ticker['o'])) {
+                $changes[$code] = null;
+
+                continue;
+            }
+            if (! is_array($ticker['c']) || ! array_key_exists(0, $ticker['c'])) {
+                throw new ProviderResponseException('Kraken returned invalid daily changes.');
+            }
+
+            $last = ExchangeRate::positiveDecimal($ticker['c'][0]);
+            $open = ExchangeRate::positiveDecimal($ticker['o']);
+            $change = $last->dividedBy($open, 18, RoundingMode::HalfUp)->minus(1)->multipliedBy(100)->toFloat();
+            if (! is_finite($change)) {
+                throw new ProviderResponseException('Kraken returned invalid daily changes.');
+            }
+            $changes[$code] = $change;
         }
 
         return $changes;
@@ -120,23 +132,15 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
     /** @return array<string, mixed> */
     private function request(string $endpoint, array $params): array
     {
-        try {
-            $response = ($this->clients ??= app(ExternalApiClientFactory::class))->for('kraken')->get($endpoint, $params);
-        } catch (ConnectionException $exception) {
-            throw new ProviderTimeoutException('Kraken market data request failed.', $exception);
-        }
+        $response = ($this->clients ??= app(ExternalApiClientFactory::class))->get('kraken', $endpoint, $params);
 
-        if ($response->status() === 429) {
-            $retryAfter = $response->header('Retry-After');
-            throw new ProviderRateLimitException('Kraken market data rate limit reached.', is_numeric($retryAfter) ? max(0, (int) $retryAfter) : null);
-        }
-        if ($response->failed() || $response->json('error') !== []) {
+        if ($response->json('error') !== []) {
             throw new ProviderResponseException('Kraken market data is unavailable.');
         }
 
         $result = $response->json('result');
         if (! is_array($result)) {
-            throw new ProviderException('Kraken returned invalid market data.');
+            throw new ProviderResponseException('Kraken returned invalid market data.');
         }
 
         return $result;
@@ -147,7 +151,7 @@ final class KrakenMarketDataProvider implements DailyChangeProviderInterface, Ma
         $value = reset($result);
 
         if (! is_array($value)) {
-            throw new ProviderException('Kraken returned invalid market data.');
+            throw new ProviderResponseException('Kraken returned invalid market data.');
         }
 
         return $value;

@@ -79,6 +79,17 @@ final class ProviderSelectionService
         return true;
     }
 
+    public function definitionForAdapter(string $adapter): ?ProviderDefinition
+    {
+        foreach ($this->registry->all() as $provider) {
+            if (in_array($adapter, $provider->adapters, true)) {
+                return $provider;
+            }
+        }
+
+        return null;
+    }
+
     public function automaticDefault(ProviderCapability $capability): ?ProviderDefinition
     {
         foreach ($this->registry->forCapability($capability) as $provider) {

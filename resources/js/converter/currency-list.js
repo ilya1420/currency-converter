@@ -119,7 +119,7 @@ export const currencyListMethods = {
     },
     addRow(currency, withHaptic = true) {
         if (!currency || this.rows.some((row) => row.currency === currency)) return;
-        const row = { id: this.nextId++, currency, previousCurrency: currency, result: '', dailyChange: null, error: '', loading: false, isStale: false, isFallback: false, rateDate: null, swipeOffset: 0 };
+        const row = { id: this.nextId++, currency, previousCurrency: currency, result: '', dailyChange: null, dailyChangeStatus: null, error: '', loading: false, isStale: false, isFallback: false, rateDate: null, swipeOffset: 0 };
         this.rows.push(row); this.save(); this.loadRow(row); if (withHaptic) this.buzz();
     },
     removeRow(index) {

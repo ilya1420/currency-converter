@@ -5,9 +5,8 @@ namespace App\Currency\Providers;
 use App\Currency\Contracts\CurrencyCatalogProviderInterface;
 use App\Currency\DTO\CurrencyDefinition;
 use App\Currency\Enums\CurrencyType;
-use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Services\ExternalApiClientFactory;
-use Illuminate\Http\Client\ConnectionException;
 
 final class KrakenCurrencyCatalogProvider implements CurrencyCatalogProviderInterface
 {
@@ -15,15 +14,11 @@ final class KrakenCurrencyCatalogProvider implements CurrencyCatalogProviderInte
 
     public function currencies(): array
     {
-        try {
-            $response = $this->clients->for('kraken')->get('AssetPairs', ['assetVersion' => 1]);
-        } catch (ConnectionException $exception) {
-            throw new ProviderException('Kraken currency catalog is unavailable.', previous: $exception);
-        }
+        $response = $this->clients->get('kraken', 'AssetPairs', ['assetVersion' => 1]);
 
         $pairs = $response->json('result');
-        if ($response->failed() || ! is_array($pairs)) {
-            throw new ProviderException('Kraken currency catalog is unavailable.');
+        if ($response->json('error') !== [] || ! is_array($pairs)) {
+            throw new ProviderResponseException('Kraken currency catalog is unavailable.');
         }
 
         $currencies = [];

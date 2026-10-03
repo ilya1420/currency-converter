@@ -23,7 +23,9 @@ final class MarketChartEndpointTest extends TestCase
         ]);
 
         $this->getJson('/market/BTC?type=crypto&interval=60')->assertTooManyRequests()
-            ->assertHeader('Retry-After', '17')->assertJsonPath('code', 'provider_rate_limited');
+            ->assertHeader('Retry-After', '17')->assertJsonPath('code', 'provider_rate_limited')
+            ->assertJsonPath('provider', 'kraken')
+            ->assertJsonPath('retryAfter', 17);
     }
 
     public function test_provider_connection_failure_returns_a_safe_503_response(): void
@@ -46,7 +48,8 @@ final class MarketChartEndpointTest extends TestCase
         $this->getJson('/market/BTC?type=crypto&interval=60')
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'provider_timeout')
-            ->assertJson(['message' => 'Провайдер не ответил вовремя. Попробуйте позже.'])
+            ->assertJsonPath('provider', 'kraken')
+            ->assertJson(['message' => 'Kraken не ответил вовремя. Попробуйте позже.'])
             ->assertJsonMissing(['message' => 'upstream detail must not be exposed']);
     }
 }

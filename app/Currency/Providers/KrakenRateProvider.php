@@ -7,13 +7,10 @@ use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\RateSource;
-use App\Currency\Exceptions\ProviderRateLimitException;
 use App\Currency\Exceptions\ProviderResponseException;
-use App\Currency\Exceptions\ProviderTimeoutException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\ExternalApiClientFactory;
 use DateTimeImmutable;
-use Illuminate\Http\Client\ConnectionException;
 
 final class KrakenRateProvider implements RateProviderInterface
 {
@@ -45,16 +42,9 @@ final class KrakenRateProvider implements RateProviderInterface
             throw new UnsupportedCurrencyPairException("Kraken does not support {$from->code}/{$to->code}.");
         }
 
-        try {
-            $response = ($this->clients ??= app(ExternalApiClientFactory::class))->for('kraken')->get('Ticker', ['pair' => $this->mapper->usdPair($from)]);
-        } catch (ConnectionException $exception) {
-            throw new ProviderTimeoutException('Kraken request timed out.', $exception);
-        }
+        $response = ($this->clients ??= app(ExternalApiClientFactory::class))->get('kraken', 'Ticker', ['pair' => $this->mapper->usdPair($from)]);
 
-        if ($response->status() === 429) {
-            throw new ProviderRateLimitException('Kraken rate limit reached.', $this->retryAfter($response->header('Retry-After')));
-        }
-        if ($response->failed() || $response->json('error') !== []) {
+        if ($response->json('error') !== []) {
             throw new ProviderResponseException('Kraken returned an error response.');
         }
 
@@ -67,10 +57,5 @@ final class KrakenRateProvider implements RateProviderInterface
         $price = ExchangeRate::positiveDecimal($ticker['c'][0])->__toString();
 
         return new ExchangeRate($from, $to, $price, RateSource::KRAKEN, new DateTimeImmutable);
-    }
-
-    private function retryAfter(?string $value): ?int
-    {
-        return is_numeric($value) ? max(0, (int) $value) : null;
     }
 }
