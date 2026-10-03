@@ -2,6 +2,26 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { conversionMethods } from '../../resources/js/converter/conversion.js';
+import { currencyApi } from '../../resources/js/converter/api.js';
+
+test('long conversion and daily-change lists are split into twenty-item batches', async () => {
+    const originalFetch = globalThis.fetch;
+    const sizes = [];
+    globalThis.fetch = async (url, options) => {
+        const isConversion = url === '/conversions';
+        const codes = isConversion ? JSON.parse(options.body).targets : new URL(url, 'http://localhost').searchParams.getAll('currencies[]');
+        sizes.push(codes.length);
+        return new Response(JSON.stringify({ [isConversion ? 'conversions' : 'changes']: Object.fromEntries(codes.map(code => [code, isConversion ? { factor: '1' } : 0])) }));
+    };
+    try {
+        const codes = Array.from({ length: 41 }, (_, index) => `C${index}`);
+        const conversions = await currencyApi.conversions({ from: 'USD', targets: [...codes, codes[0]], refresh: true });
+        const changes = await currencyApi.dailyChanges(codes);
+        assert.deepEqual(sizes, [20, 20, 1, 20, 20, 1]);
+        assert.equal(Object.keys(conversions.conversions).length, 41);
+        assert.equal(Object.keys(changes.changes).length, 41);
+    } finally { globalThis.fetch = originalFetch; }
+});
 
 function conversionState() {
     const state = {

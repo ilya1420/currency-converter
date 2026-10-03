@@ -22,6 +22,16 @@ class RateServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_forced_refresh_fetches_each_pair_only_once_per_service(): void
+    {
+        $provider = $this->provider();
+        $service = $this->service(new ExchangeRateRepository, [$provider]);
+        $first = $service->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
+        $second = $service->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
+        $this->assertSame(1, $provider->calls);
+        $this->assertSame($first, $second);
+    }
+
     public function test_current_official_date_avoids_refresh_even_after_ttl(): void
     {
         $this->freezeTime();
