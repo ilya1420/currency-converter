@@ -38,10 +38,14 @@ export const conversionMethods = {
             this.rows.forEach((row) => {
                 if (row.currency === this.base) {
                     row.result = this.amount;
+                    row.isStale = false;
+                    row.isFallback = false;
                     return;
                 }
                 const conversion = data.conversions[row.currency];
                 if (conversion?.error) {
+                    row.isStale = false;
+                    row.isFallback = false;
                     row.error = this.errorLabel(conversion.error);
                     row.result = '';
                     delete this.factors[row.currency];
@@ -53,8 +57,10 @@ export const conversionMethods = {
                 this.factors[row.currency] = conversion.factor;
                 row.result = multiply(this.amount, conversion.factor);
                 sources.push(...conversion.sources);
-                lastUpdatedAt = conversion.updatedAt;
-                if (conversion.isStale) this.message = 'Нет сети. Используются сохранённые курсы.';
+                if (!lastUpdatedAt || Date.parse(conversion.updatedAt) < Date.parse(lastUpdatedAt)) lastUpdatedAt = conversion.updatedAt;
+                row.isStale = Boolean(conversion.isStale);
+                row.isFallback = Boolean(conversion.isFallback);
+                if (conversion.isStale) this.message = 'Используются сохранённые курсы. Не удалось получить актуальные данные.';
             });
             this.sources = [...new Set(sources)];
             this.lastUpdatedAt = lastUpdatedAt;
@@ -109,7 +115,9 @@ export const conversionMethods = {
             row.result = multiply(this.amount, data.factor);
             this.sources = [...new Set([...this.sources, ...data.sources])];
             this.lastUpdatedAt = data.updatedAt;
-            if (data.isStale) this.message = 'Нет сети. Используются сохранённые курсы.';
+            row.isStale = Boolean(data.isStale);
+            row.isFallback = Boolean(data.isFallback);
+            if (data.isStale) this.message = 'Используются сохранённые курсы. Не удалось получить актуальные данные.';
         } catch (error) {
             if (token === this.requestToken && pair === `${this.base}:${row.currency}`) {
                 row.error = this.errorLabel(error.code);

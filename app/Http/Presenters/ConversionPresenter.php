@@ -42,6 +42,9 @@ final readonly class ConversionPresenter
         return [
             'sources' => array_values(array_unique(array_map(static fn ($rate): string => $rate->source->value, $result->ratesUsed))),
             'isStale' => $result->isStale,
+            'isFallback' => (bool) array_filter($result->ratesUsed, static fn ($rate): bool => $rate->fallbackReason !== null),
+            'fallbackReasons' => array_values(array_unique(array_filter(array_map(static fn ($rate): ?string => $rate->fallbackReason, $result->ratesUsed)))),
+            'rateDates' => array_values(array_unique(array_filter(array_map(static fn ($rate): ?string => $rate->publishedAt?->format('Y-m-d'), $result->ratesUsed)))),
             'updatedAt' => $result->rateUpdatedAt->format(DATE_ATOM),
         ];
     }

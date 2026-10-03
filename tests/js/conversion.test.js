@@ -19,6 +19,25 @@ function conversionState() {
     return state;
 }
 
+test('aggregate update date is independent of row order and fallback is not a network claim', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ conversions: {
+        EUR: { factor: '0.9', sources: ['nbrb'], updatedAt: '2026-10-01T00:00:00Z', isStale: false, isFallback: true },
+        BTC: { factor: '0.00001', sources: ['kraken'], updatedAt: '2026-10-01T12:00:00Z', isStale: false },
+    }, changes: {} }));
+    try {
+        const state = conversionState();
+        state.rows.push({ currency: 'BTC', result: '', error: '' });
+        await state.loadAll();
+        assert.equal(state.lastUpdatedAt, '2026-10-01T00:00:00Z');
+        assert.equal(state.rows[1].isFallback, true);
+        assert.equal(state.message, '');
+        state.rows.reverse();
+        await state.loadAll();
+        assert.equal(state.lastUpdatedAt, '2026-10-01T00:00:00Z');
+    } finally { globalThis.fetch = originalFetch; }
+});
+
 test('concurrent conversion loads are coalesced into one request', async () => {
     let requests = 0;
     const originalFetch = globalThis.fetch;
@@ -67,12 +86,12 @@ test('partial failure marks the unavailable row while preserving stale rates and
 
         assert.equal(state.rows[1].result, '92');
         assert.equal(failedRow.error, 'Лимит API');
-        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы. Kraken временно ограничил запросы.');
+        assert.equal(state.message, 'Используются сохранённые курсы. Не удалось получить актуальные данные. Kraken временно ограничил запросы.');
         assert.equal(failedRow.result, '');
         assert.equal(state.factors.BYN, undefined);
         assert.deepEqual(state.sources, ['nbrb']);
         assert.equal(state.lastUpdatedAt, '2026-09-28T00:00:00Z');
-        assert.equal(state.message, 'Нет сети. Используются сохранённые курсы. Kraken временно ограничил запросы.');
+        assert.equal(state.message, 'Используются сохранённые курсы. Не удалось получить актуальные данные. Kraken временно ограничил запросы.');
     } finally {
         globalThis.fetch = originalFetch;
     }
