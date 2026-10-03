@@ -1,5 +1,10 @@
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
+function batches(values) {
+    const unique = [...new Set(values)];
+    return Array.from({ length: Math.ceil(unique.length / 20) }, (_, index) => unique.slice(index * 20, index * 20 + 20));
+}
+
 async function request(url, options = {}) {
     const response = await fetch(url, options);
     const payload = await response.json();
@@ -20,17 +25,25 @@ export const currencyApi = {
     catalog() {
         return request('/currencies');
     },
-    conversions({ from, fromType, targets, refresh }) {
-        return request('/conversions', {
-            method: 'POST', headers: JSON_HEADERS,
-            body: JSON.stringify({ from, fromType, targets, refresh }),
-        });
+    async conversions({ from, fromType, targets, refresh }) {
+        const conversions = {};
+        for (const batch of batches(targets)) {
+            const result = await request('/conversions', {
+                method: 'POST', headers: JSON_HEADERS,
+                body: JSON.stringify({ from, fromType, targets: batch, refresh }),
+            });
+            Object.assign(conversions, result.conversions);
+        }
+        return { conversions };
     },
-    dailyChanges(currencies) {
-        const query = new URLSearchParams();
-        currencies.forEach((currency) => query.append('currencies[]', currency));
-
-        return request(`/daily-changes?${query.toString()}`);
+    async dailyChanges(currencies) {
+        const changes = {};
+        for (const batch of batches(currencies)) {
+            const query = new URLSearchParams();
+            batch.forEach((currency) => query.append('currencies[]', currency));
+            Object.assign(changes, (await request(`/daily-changes?${query.toString()}`)).changes);
+        }
+        return { changes };
     },
     conversion({ from, fromType, to, toType, refresh }) {
         return request('/conversion', {

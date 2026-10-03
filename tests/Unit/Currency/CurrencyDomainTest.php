@@ -7,12 +7,25 @@ use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\RateSource;
+use App\Currency\Exceptions\ProviderResponseException;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class CurrencyDomainTest extends TestCase
 {
+    #[DataProvider('invalidRates')]
+    public function test_invalid_rates_are_rejected_before_arithmetic(string $rate): void
+    {
+        $this->expectException(ProviderResponseException::class);
+        new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), $rate, RateSource::NBRB, new DateTimeImmutable);
+    }
+
+    public static function invalidRates(): array
+    {
+        return [['0'], ['-1'], ['garbage'], ['NaN'], ['INF']];
+    }
+
     #[DataProvider('currencies')]
     public function test_currency_has_the_expected_type(Currency $currency, CurrencyType $type): void
     {

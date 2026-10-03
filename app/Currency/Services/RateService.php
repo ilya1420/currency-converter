@@ -21,6 +21,9 @@ final class RateService
     /** @var array<string, ExchangeRate> */
     private array $resolvedRates = [];
 
+    /** @var array<string, true> */
+    private array $refreshAttempts = [];
+
     /** @var array<class-string<RateProviderInterface>, ProviderException> */
     private array $providerFailures = [];
 
@@ -34,7 +37,7 @@ final class RateService
     public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
     {
         $key = "{$from->type->value}:{$from->code}:{$to->type->value}:{$to->code}";
-        if (! $forceRefresh && isset($this->resolvedRates[$key])) {
+        if (isset($this->resolvedRates[$key]) && (! $forceRefresh || isset($this->refreshAttempts[$key]))) {
             return $this->resolvedRates[$key];
         }
 
@@ -78,6 +81,8 @@ final class RateService
             }
 
             try {
+                $this->refreshAttempts[$key] = true;
+
                 return $this->resolvedRates[$key] = $this->rates->save($provider->getRate($from, $to));
             } catch (ProviderException $exception) {
                 $this->providerFailures[$provider::class] = $exception;
