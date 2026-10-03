@@ -9,6 +9,8 @@ use App\Currency\Enums\CurrencyType;
 use App\Currency\Enums\ProviderCapability;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
+use App\Currency\Exceptions\ProviderRateLimitException;
+use App\Currency\Exceptions\ProviderTimeoutException;
 use App\Currency\Exceptions\RateUnavailableException;
 use App\Currency\Repositories\ExchangeRateRepository;
 use DateInterval;
@@ -58,14 +60,18 @@ final class RateService
             }
             $source = $provider->source();
             $freshAfter = (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->ttl($source).'S'));
-            if (! $forceRefresh && ($fresh = $this->rates->findFresh($source, $from, $to, $freshAfter))) {
+            $latest = $this->rates->findLatest($source, $from, $to);
+            if ($latest !== null && $this->isCurrentOfficialRate($latest)) {
+                return $this->resolvedRates[$key] = $latest;
+            }
+            if (! $forceRefresh && ($fresh = $this->rates->findFresh($source, $from, $to, $freshAfter)) && ($source !== RateSource::NBRB || $fresh->publishedAt === null)) {
                 return $this->resolvedRates[$key] = $fresh;
             }
 
             if (isset($this->providerFailures[$provider::class])) {
                 $cached = $this->rates->findLatest($source, $from, $to);
                 if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
-                    return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
+                    return $this->resolvedRates[$key] = $this->fallback($cached, $this->providerFailures[$provider::class]);
                 }
 
                 throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", $source->value, previous: $this->providerFailures[$provider::class]);
@@ -77,7 +83,7 @@ final class RateService
                 $this->providerFailures[$provider::class] = $exception;
                 $cached = $this->rates->findLatest($source, $from, $to);
                 if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
-                    return $this->resolvedRates[$key] = new ExchangeRate($cached->from, $cached->to, $cached->rate, $cached->source, $cached->fetchedAt, $cached->publishedAt, true);
+                    return $this->resolvedRates[$key] = $this->fallback($cached, $exception);
                 }
 
                 throw new RateUnavailableException("No rate is available from {$source->value} for {$from->code}/{$to->code}.", $source->value, previous: $exception);
@@ -103,6 +109,24 @@ final class RateService
     private function ttl(RateSource $source): int
     {
         return (int) config("currency.{$source->value}.rate_ttl_seconds");
+    }
+
+    private function isCurrentOfficialRate(ExchangeRate $rate): bool
+    {
+        return $rate->source === RateSource::NBRB
+            && $rate->publishedAt !== null
+            && $rate->publishedAt->setTimezone(new \DateTimeZone('Europe/Minsk'))->format('Y-m-d') === now('Europe/Minsk')->format('Y-m-d');
+    }
+
+    private function fallback(ExchangeRate $rate, ProviderException $exception): ExchangeRate
+    {
+        $reason = match (true) {
+            $exception instanceof ProviderRateLimitException => 'provider_rate_limited',
+            $exception instanceof ProviderTimeoutException => 'provider_timeout',
+            default => 'provider_unavailable',
+        };
+
+        return new ExchangeRate($rate->from, $rate->to, $rate->rate, $rate->source, $rate->fetchedAt, $rate->publishedAt, ! $this->isCurrentOfficialRate($rate), $reason);
     }
 
     private function maxStaleAge(RateSource $source): int

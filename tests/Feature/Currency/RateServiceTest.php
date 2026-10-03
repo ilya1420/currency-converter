@@ -22,6 +22,30 @@ class RateServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_current_official_date_avoids_refresh_even_after_ttl(): void
+    {
+        $this->freezeTime();
+        $repository = new ExchangeRateRepository;
+        $repository->save(new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), '3.12', RateSource::NBRB, DateTimeImmutable::createFromInterface(now()->subHours(10)), DateTimeImmutable::createFromInterface(now('Europe/Minsk')->startOfDay())));
+        $provider = $this->provider();
+        $rate = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'), true);
+        $this->assertSame(0, $provider->calls);
+        $this->assertFalse($rate->isStale);
+        $this->assertNull($rate->fallbackReason);
+    }
+
+    public function test_previous_official_date_is_refreshed_even_when_recently_fetched(): void
+    {
+        $this->freezeTime();
+        $repository = new ExchangeRateRepository;
+        $repository->save(new ExchangeRate(Currency::fiat('USD'), Currency::fiat('BYN'), '3.12', RateSource::NBRB, DateTimeImmutable::createFromInterface(now()), DateTimeImmutable::createFromInterface(now('Europe/Minsk')->subDay())));
+        $provider = $this->provider(exception: new ProviderException('failure'));
+        $rate = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $this->assertSame(1, $provider->calls);
+        $this->assertTrue($rate->isStale);
+        $this->assertSame('provider_unavailable', $rate->fallbackReason);
+    }
+
     public function test_fresh_cache_does_not_call_provider(): void
     {
         $repository = new ExchangeRateRepository;

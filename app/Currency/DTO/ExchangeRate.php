@@ -16,5 +16,6 @@ final readonly class ExchangeRate
         public DateTimeImmutable $fetchedAt,
         public ?DateTimeImmutable $publishedAt = null,
         public bool $isStale = false,
+        public ?string $fallbackReason = null,
     ) {}
 }
