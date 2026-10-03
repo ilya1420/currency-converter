@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { conversionMethods } from '../../resources/js/converter/conversion.js';
 import { currencyApi } from '../../resources/js/converter/api.js';
+import { createConverterState } from '../../resources/js/converter/state.js';
 
 test('long conversion and daily-change lists are split into twenty-item batches', async () => {
     const originalFetch = globalThis.fetch;
@@ -177,4 +178,68 @@ test('activating a converted row preserves its amount and recalculates the list'
     assert.equal(state.amount, '92');
     assert.equal(state.displayAmount, '92');
     assert.ok(Math.abs(Number(state.rows[0].result) - 100) < 0.000001);
+});
+
+test('provider switch discards pending conversion and daily-change responses', async () => {
+    const originalFetch = globalThis.fetch;
+    let finishConversion;
+    let finishChanges;
+    globalThis.fetch = (url) => new Promise((resolve) => {
+        if (String(url).startsWith('/daily-changes')) finishChanges = resolve;
+        else finishConversion = resolve;
+    });
+    try {
+        const state = createConverterState([{ code: 'USD', type: 'fiat' }, { code: 'EUR', type: 'fiat' }]);
+        Object.defineProperties(state, Object.getOwnPropertyDescriptors(conversionMethods));
+        state.rows = state.rows.slice(0, 2);
+        const pending = state.loadAll();
+        state.invalidateProviderData('crypto_rates');
+        finishConversion(new Response(JSON.stringify({ conversions: { EUR: { factor: '9', sources: ['old'], updatedAt: '2026-10-01T00:00:00Z' } } })));
+        finishChanges(new Response(JSON.stringify({ changes: { EUR: 99 } })));
+        await pending;
+        await Promise.resolve();
+        assert.equal(state.rows[1].result, '');
+        assert.equal(state.rows[1].dailyChange, null);
+        assert.deepEqual(state.factors, {});
+        assert.deepEqual(state.sources, []);
+        assert.equal(state.loading, false);
+        assert.equal(state.rows[1].loading, false);
+    } finally { globalThis.fetch = originalFetch; }
+});
+
+test('unsupported saved rows stay disabled and are excluded from conversion requests', async () => {
+    const originalFetch = globalThis.fetch;
+    const requested = [];
+    globalThis.fetch = async (url, options) => {
+        if (String(url).startsWith('/daily-changes')) return new Response('{"changes":{}}');
+        requested.push(...JSON.parse(options.body).targets);
+        return new Response(JSON.stringify({ conversions: { EUR: { factor: '0.9', sources: ['nbrb'], updatedAt: '2026-10-01T00:00:00Z' } } }));
+    };
+    try {
+        const state = conversionState();
+        state.currencyUnsupported = (currency) => currency === 'BONK';
+        state.rows.push({ currency: 'BONK', result: '12', error: '', loading: false });
+        await state.loadAll();
+        assert.deepEqual(requested, ['USD', 'EUR']);
+        assert.equal(state.rows.at(-1).error, 'Не поддерживается');
+        assert.equal(state.rows.at(-1).result, '12');
+        state.activateRow(state.rows.at(-1));
+        assert.equal(state.base, 'USD');
+    } finally { globalThis.fetch = originalFetch; }
+});
+
+test('unsupported saved base preserves the layout and avoids requesting invalid pairs', async () => {
+    const originalFetch = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = async () => { requests++; throw new Error('Unexpected request'); };
+    try {
+        const state = conversionState();
+        state.currencyUnsupported = (currency) => currency === 'USD';
+        await state.loadAll();
+        assert.equal(requests, 0);
+        assert.equal(state.base, 'USD');
+        assert.equal(state.rows[0].error, 'Не поддерживается');
+        assert.equal(state.loading, false);
+        assert.match(state.message, /Базовая валюта не поддерживается/);
+    } finally { globalThis.fetch = originalFetch; }
 });

@@ -8,6 +8,7 @@ use App\Currency\Providers\KrakenAssetMapper;
 use App\Currency\Providers\KrakenMarketDataProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class KrakenMarketDataProviderTest extends TestCase
@@ -106,5 +107,44 @@ class KrakenMarketDataProviderTest extends TestCase
         $this->assertSame([
             ['time' => 1_700_000_000, 'open' => '10', 'high' => '12', 'low' => '9', 'close' => '11'],
         ], $chart['candles']);
+    }
+
+    /** @param list<mixed> $ohlc @param list<array{time: int, open: string, high: string, low: string, close: string}> $expected */
+    #[DataProvider('closedCandleCases')]
+    public function test_it_keeps_valid_closed_candles_before_a_malformed_current_candle(array $ohlc, array $expected): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.kraken.com/0/public/OHLC*' => Http::response([
+                'error' => [], 'result' => ['XBT/USD' => $ohlc],
+            ]),
+            'https://api.kraken.com/0/public/Ticker*' => Http::response([
+                'error' => [], 'result' => ['XBT/USD' => ['c' => ['12'], 'o' => '11']],
+            ]),
+            'https://api.kraken.com/0/public/Depth*' => Http::response([
+                'error' => [], 'result' => ['XBT/USD' => ['bids' => [], 'asks' => []]],
+            ]),
+        ]);
+
+        $chart = (new KrakenMarketDataProvider(new KrakenAssetMapper))
+            ->chart(Currency::crypto('BTC', 'XBTUSD'), 60);
+
+        $this->assertSame($expected, $chart['candles']);
+    }
+
+    /** @return array<string, array{list<mixed>, list<array{time: int, open: string, high: string, low: string, close: string}>}> */
+    public static function closedCandleCases(): array
+    {
+        $closed = [1_700_000_000, '10', '12', '9', '11'];
+        $expected = [['time' => 1_700_000_000, 'open' => '10', 'high' => '12', 'low' => '9', 'close' => '11']];
+
+        return [
+            'malformed current prices' => [[$closed, [1_700_003_600, 'invalid', '12', '9', '11']], $expected],
+            'malformed current timestamp' => [[$closed, ['invalid', '11', '13', '10', '12']], $expected],
+            'empty current entry' => [[$closed, []], $expected],
+            'only current candle' => [[$closed], []],
+            'empty response' => [[], []],
+            'unsafe closed timestamp' => [[[9_007_199_254_740_992, '10', '12', '9', '11'], $closed], []],
+        ];
     }
 }
