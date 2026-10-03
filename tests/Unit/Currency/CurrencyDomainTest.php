@@ -43,19 +43,19 @@ class CurrencyDomainTest extends TestCase
     public function test_exchange_rate_preserves_typed_metadata(): void
     {
         $fetchedAt = new DateTimeImmutable('2026-09-24T10:00:00+00:00');
-        $publishedAt = new DateTimeImmutable('2026-09-24T00:00:00+00:00');
+        $rateDate = new DateTimeImmutable('2026-09-24T00:00:00+00:00');
 
         $rate = new ExchangeRate(
             Currency::fiat('USD'), Currency::fiat('BYN'),
             '3.12345678',
             RateSource::NBRB,
             $fetchedAt,
-            $publishedAt,
+            $rateDate,
         );
 
         $this->assertSame('3.12345678', $rate->rate);
         $this->assertSame($fetchedAt, $rate->fetchedAt);
-        $this->assertSame($publishedAt, $rate->publishedAt);
+        $this->assertSame($rateDate, $rate->rateDate);
     }
 
     public function test_conversion_result_keeps_the_rates_used_by_a_route(): void

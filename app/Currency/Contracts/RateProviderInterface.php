@@ -12,5 +12,5 @@ interface RateProviderInterface
 
     public function supports(Currency $from, Currency $to): bool;
 
-    public function getRate(Currency $from, Currency $to): ExchangeRate;
+    public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate;
 }

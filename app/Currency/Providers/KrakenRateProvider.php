@@ -39,7 +39,7 @@ final class KrakenRateProvider implements RateProviderInterface
         }
     }
 
-    public function getRate(Currency $from, Currency $to): ExchangeRate
+    public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
     {
         if (! $this->supports($from, $to)) {
             throw new UnsupportedCurrencyPairException("Kraken does not support {$from->code}/{$to->code}.");

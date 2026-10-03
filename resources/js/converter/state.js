@@ -153,6 +153,11 @@ export function createConverterState(catalog) {
             if (!this.lastUpdatedAt || !this.sources.length) return '';
             return `Обновлено ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(this.lastUpdatedAt))}`;
         },
+        formatRateDate(date) {
+            if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
+            const [year, month, day] = date.split('-').map(Number);
+            return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short' }).format(new Date(year, month - 1, day));
+        },
         currencyType(currency) { return this.catalog.find(({ code }) => code === currency)?.type || this.meta[currency]?.type || (this.meta[currency]?.icon ? 'crypto' : 'fiat'); },
         fiatFractionDigits(currency) { if (ZERO_DECIMAL.has(currency)) return 0; if (THREE_DECIMAL.has(currency)) return 3; return FOUR_DECIMAL.has(currency) ? 4 : 2; },
         inputFractionDigits() { return this.currencyType(this.base) === 'crypto' ? 6 : this.fiatFractionDigits(this.base); },

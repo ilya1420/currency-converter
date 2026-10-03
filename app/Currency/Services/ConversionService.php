@@ -34,6 +34,7 @@ final class ConversionService
             min(array_map(static fn (ExchangeRate $rate): DateTimeImmutable => $rate->fetchedAt, $ratesUsed)),
             (bool) array_filter($ratesUsed, static fn (ExchangeRate $rate): bool => $rate->isStale),
             $ratesUsed,
+            (bool) array_filter($ratesUsed, static fn (ExchangeRate $rate): bool => $rate->isFallback),
         );
     }
 

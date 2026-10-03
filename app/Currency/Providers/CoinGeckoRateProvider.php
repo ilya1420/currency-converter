@@ -30,15 +30,19 @@ final class CoinGeckoRateProvider implements RateProviderInterface
         return $from->type === CurrencyType::CRYPTO && $from->coinGeckoId !== null && $to->type === CurrencyType::FIAT && $to->code === 'USD';
     }
 
-    public function getRate(Currency $from, Currency $to): ExchangeRate
+    public function getRate(Currency $from, Currency $to, bool $forceRefresh = false): ExchangeRate
     {
         if (! $this->supports($from, $to)) {
             throw new UnsupportedCurrencyPairException("CoinGecko does not support {$from->code}/{$to->code}.");
         }
         $coinGeckoId = $from->coinGeckoId;
+        $cacheKey = "coingecko:price:v1:{$coinGeckoId}";
+        if ($forceRefresh) {
+            $this->cache->forget($cacheKey);
+        }
         try {
             $cached = $this->cache->remember(
-                "coingecko:price:v1:{$from->coinGeckoId}",
+                $cacheKey,
                 now()->addSeconds((int) config('currency.coingecko.rate_ttl_seconds')),
                 function () use ($coinGeckoId): array {
                     $request = $this->clients->for('coingecko');

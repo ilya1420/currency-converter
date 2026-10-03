@@ -13,7 +13,7 @@ final readonly class ConversionPresenter
         private AmountFormatter $formatter,
     ) {}
 
-    /** @return array{sourceAmount: string, targetAmount: string, targetDisplay: string, factor: string, factorDisplay: string, sources: list<string>, isStale: bool, updatedAt: string} */
+    /** @return array{sourceAmount: string, targetAmount: string, targetDisplay: string, factor: string, factorDisplay: string, sources: list<string>, isStale: bool, isFallback: bool, fallbackReasons: list<string>, rateDate: ?string, rateDates: list<string>, updatedAt: string} */
     public function detail(ConversionResult $result): array
     {
         $factor = $result->sourceAmount === '0'
@@ -30,21 +30,27 @@ final readonly class ConversionPresenter
         ];
     }
 
-    /** @return array{factor: string, sources: list<string>, isStale: bool, updatedAt: string} */
+    /** @return array{factor: string, sources: list<string>, isStale: bool, isFallback: bool, fallbackReasons: list<string>, rateDate: ?string, rateDates: list<string>, updatedAt: string} */
     public function factor(ConversionResult $result): array
     {
         return ['factor' => $result->targetAmount, ...$this->rateMetadata($result)];
     }
 
-    /** @return array{sources: list<string>, isStale: bool, updatedAt: string} */
+    /** @return array{sources: list<string>, isStale: bool, isFallback: bool, fallbackReasons: list<string>, rateDate: ?string, rateDates: list<string>, updatedAt: string} */
     private function rateMetadata(ConversionResult $result): array
     {
+        $rateDates = array_values(array_unique(array_filter(array_map(
+            static fn ($rate): ?string => $rate->rateDate?->format('Y-m-d'),
+            $result->ratesUsed,
+        ))));
+
         return [
             'sources' => array_values(array_unique(array_map(static fn ($rate): string => $rate->source->value, $result->ratesUsed))),
             'isStale' => $result->isStale,
-            'isFallback' => (bool) array_filter($result->ratesUsed, static fn ($rate): bool => $rate->fallbackReason !== null),
+            'isFallback' => $result->isFallback,
             'fallbackReasons' => array_values(array_unique(array_filter(array_map(static fn ($rate): ?string => $rate->fallbackReason, $result->ratesUsed)))),
-            'rateDates' => array_values(array_unique(array_filter(array_map(static fn ($rate): ?string => $rate->publishedAt?->format('Y-m-d'), $result->ratesUsed)))),
+            'rateDate' => $rateDates[0] ?? null,
+            'rateDates' => $rateDates,
             'updatedAt' => $result->rateUpdatedAt->format(DATE_ATOM),
         ];
     }

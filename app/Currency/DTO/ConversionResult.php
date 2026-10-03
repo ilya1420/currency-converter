@@ -18,5 +18,6 @@ final readonly class ConversionResult
         public DateTimeImmutable $rateUpdatedAt,
         public bool $isStale,
         public array $ratesUsed = [],
+        public bool $isFallback = false,
     ) {}
 }
