@@ -5,6 +5,7 @@ namespace App\Currency\Repositories;
 use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\RateSource;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Models\StoredExchangeRate;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -64,10 +65,18 @@ final class ExchangeRateRepository
 
     private function map(?StoredExchangeRate $stored): ?ExchangeRate
     {
-        return $stored === null ? null : new ExchangeRate(
-            $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
-            RateSource::from($stored->provider), $stored->fetched_at, $stored->published_at,
-        );
+        if ($stored === null) {
+            return null;
+        }
+
+        try {
+            return new ExchangeRate(
+                $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
+                RateSource::from($stored->provider), $stored->fetched_at, $stored->published_at,
+            );
+        } catch (ProviderResponseException) {
+            return null;
+        }
     }
 
     private function currency(string $code, RateSource $source, bool $from): Currency

@@ -6,6 +6,7 @@ use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\RateSource;
 use App\Currency\Repositories\ExchangeRateRepository;
+use App\Models\StoredExchangeRate;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -209,5 +210,87 @@ class ConversionEndpointTest extends TestCase
         ]);
 
         $this->getJson('/currencies')->assertOk();
+    }
+
+    public function test_it_returns_503_when_a_saved_rate_is_corrupt_and_provider_is_offline(): void
+    {
+        StoredExchangeRate::query()->create([
+            'provider' => 'kraken', 'from_currency' => 'BTC', 'to_currency' => 'USD',
+            'rate' => '0', 'fetched_at' => now(),
+        ]);
+        Http::preventStrayRequests();
+        $this->primeCryptoCatalog();
+        Http::fake(['https://api.kraken.com/0/public/Ticker*' => Http::failedConnection()]);
+
+        $this->postJson('/conversion', ['amount' => '1', 'from' => 'BTC', 'fromType' => 'crypto', 'to' => 'USD'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'provider_timeout')
+            ->assertJsonPath('provider', 'kraken');
+
+        $this->assertDatabaseHas('exchange_rates', ['provider' => 'kraken', 'rate' => '0']);
+    }
+
+    public function test_it_refreshes_a_corrupt_saved_rate_and_persists_the_valid_response(): void
+    {
+        StoredExchangeRate::query()->create([
+            'provider' => 'kraken', 'from_currency' => 'BTC', 'to_currency' => 'USD',
+            'rate' => 'invalid', 'fetched_at' => now(),
+        ]);
+        Http::preventStrayRequests();
+        $this->primeCryptoCatalog();
+        Http::fake(['https://api.kraken.com/0/public/Ticker*' => Http::response([
+            'error' => [], 'result' => ['XXBTZUSD' => ['c' => ['64000']]],
+        ])]);
+
+        $this->postJson('/conversion', ['amount' => '1', 'from' => 'BTC', 'fromType' => 'crypto', 'to' => 'USD'])
+            ->assertOk()
+            ->assertJsonPath('targetAmount', '64000.000000000000000000')
+            ->assertJsonPath('isFallback', false);
+
+        $this->assertDatabaseHas('exchange_rates', ['provider' => 'kraken', 'rate' => '64000']);
+        $this->assertDatabaseCount('exchange_rates', 1);
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_returns_503_for_a_malformed_provider_price_without_persisting_it(): void
+    {
+        Http::preventStrayRequests();
+        $this->primeCryptoCatalog();
+        Http::fake(['https://api.kraken.com/0/public/Ticker*' => Http::response([
+            'error' => [], 'result' => ['XXBTZUSD' => ['c' => [true]]],
+        ])]);
+
+        $this->postJson('/conversion', ['amount' => '1', 'from' => 'BTC', 'fromType' => 'crypto', 'to' => 'USD'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'provider_unavailable')
+            ->assertJsonPath('provider', 'kraken');
+
+        $this->assertDatabaseCount('exchange_rates', 0);
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_keeps_a_valid_saved_rate_when_the_refreshed_price_is_invalid(): void
+    {
+        $repository = new ExchangeRateRepository;
+        $repository->save(new ExchangeRate(
+            Currency::crypto('BTC', 'XBTUSD'), Currency::fiat('USD'), '64000', RateSource::KRAKEN,
+            (new DateTimeImmutable)->modify('-2 minutes'),
+        ));
+        Http::preventStrayRequests();
+        $this->primeCryptoCatalog();
+        Http::fake(['https://api.kraken.com/0/public/Ticker*' => Http::response([
+            'error' => [], 'result' => ['XXBTZUSD' => ['c' => [[123]]]],
+        ])]);
+
+        $this->postJson('/conversion', ['amount' => '1', 'from' => 'BTC', 'fromType' => 'crypto', 'to' => 'USD', 'refresh' => true])
+            ->assertOk()
+            ->assertJsonPath('targetAmount', '64000.000000000000000000')
+            ->assertJsonPath('isFallback', true)
+            ->assertJsonPath('isStale', true)
+            ->assertJsonPath('fallbackReasons.0', 'provider_unavailable')
+            ->assertJsonPath('sources.0', 'kraken');
+
+        $this->assertDatabaseHas('exchange_rates', ['provider' => 'kraken', 'rate' => '64000']);
+        Http::assertSentCount(1);
     }
 }

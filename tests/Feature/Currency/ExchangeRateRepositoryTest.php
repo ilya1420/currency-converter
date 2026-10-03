@@ -9,6 +9,7 @@ use App\Currency\Repositories\ExchangeRateRepository;
 use App\Models\StoredExchangeRate;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ExchangeRateRepositoryTest extends TestCase
@@ -71,5 +72,53 @@ class ExchangeRateRepositoryTest extends TestCase
             new DateTimeImmutable($fetchedAt),
             $rateDate === null ? null : new DateTimeImmutable($rateDate, new \DateTimeZone('Europe/Minsk')),
         );
+    }
+
+    #[DataProvider('invalidStoredRates')]
+    public function test_it_ignores_invalid_saved_rates(string $value): void
+    {
+        StoredExchangeRate::query()->create([
+            'provider' => 'nbrb', 'from_currency' => 'USD', 'to_currency' => 'BYN',
+            'rate' => $value, 'fetched_at' => '2026-09-24 10:00:00', 'published_at' => '2026-09-24 00:00:00',
+        ]);
+        $repository = new ExchangeRateRepository;
+
+        $this->assertNull($repository->findLatest(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN')));
+        $this->assertNull($repository->findFresh(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'), new DateTimeImmutable('2026-09-24T09:00:00Z')));
+    }
+
+    public function test_it_replaces_a_corrupt_rate_even_when_its_official_date_is_newer(): void
+    {
+        StoredExchangeRate::query()->create([
+            'provider' => 'nbrb', 'from_currency' => 'USD', 'to_currency' => 'BYN',
+            'rate' => '0', 'fetched_at' => '2026-09-24 10:00:00', 'published_at' => '2026-09-24 00:00:00',
+        ]);
+
+        $result = (new ExchangeRateRepository)->save($this->rate('3.12', '2026-09-24T11:00:00Z', '2026-09-23'));
+
+        $this->assertSame('3.12', $result->rate);
+        $this->assertFalse($result->isFallback);
+        $this->assertDatabaseHas('exchange_rates', ['provider' => 'nbrb', 'rate' => '3.12']);
+        $this->assertDatabaseCount('exchange_rates', 1);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function invalidStoredRates(): array
+    {
+        return [
+            'zero' => ['0'], 'negative' => ['-3.12'], 'empty' => [''],
+            'text' => ['invalid'], 'json' => ['[3.12]'], 'infinity' => ['INF'],
+            'fraction' => ['1/2'], 'excessive exponent' => ['1e1024'],
+        ];
+    }
+
+    public function test_it_accepts_a_decimal_at_the_digit_limit_without_losing_precision(): void
+    {
+        $value = '0.'.str_repeat('1', 1023);
+        $repository = new ExchangeRateRepository;
+
+        $repository->save($this->rate($value, '2026-09-24T10:00:00Z'));
+
+        $this->assertSame($value, $repository->findLatest(RateSource::NBRB, Currency::fiat('USD'), Currency::fiat('BYN'))?->rate);
     }
 }
