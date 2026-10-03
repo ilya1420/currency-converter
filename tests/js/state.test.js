@@ -4,6 +4,99 @@ import test from 'node:test';
 import { createConverterState } from '../../resources/js/converter/state.js';
 import { converterStorage } from '../../resources/js/converter/storage.js';
 import { currencyApi } from '../../resources/js/converter/api.js';
+import { conversionMethods } from '../../resources/js/converter/conversion.js';
+import { calculatorMethods } from '../../resources/js/converter/calculator.js';
+import { gestureMethods } from '../../resources/js/converter/gestures.js';
+
+function layoutFixture(run) {
+    const originalStorage = globalThis.localStorage;
+    const values = new Map();
+    globalThis.localStorage = {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+    };
+    const createState = () => {
+        const state = createConverterState([
+            { code: 'USD', type: 'fiat' },
+            { code: 'BTC', type: 'crypto' },
+            { code: 'BYN', type: 'fiat' },
+            { code: 'EUR', type: 'fiat' },
+        ]);
+        for (const methods of [conversionMethods, calculatorMethods, gestureMethods]) {
+            Object.defineProperties(state, Object.getOwnPropertyDescriptors(methods));
+        }
+        state.loadAll = () => Promise.resolve();
+        state.buzz = () => {};
+        return state;
+    };
+
+    try { run(values, createState); } finally { globalThis.localStorage = originalStorage; }
+}
+
+for (const base of ['BTC', 'EUR']) {
+    test(`restart preserves row order with ${base} selected below the first row`, () => layoutFixture((values, createState) => {
+        converterStorage.saveLayout({
+            base, amount: '2.125', keyboardVisible: false,
+            rows: ['USD', 'BTC', 'BYN', 'EUR'].map((currency) => ({ currency })),
+        });
+        const returning = createState();
+
+        returning.initializeLayout();
+
+        assert.deepEqual(returning.rows.map(({ currency }) => currency), ['USD', 'BTC', 'BYN', 'EUR']);
+        assert.equal(returning.base, base);
+        assert.equal(returning.amount, '2.125');
+        assert.equal(returning.keyboardVisible, false);
+    }));
+}
+
+test('base selection and deliberate row moves preserve their independent state across repeated restarts', () => layoutFixture((values, createState) => {
+    converterStorage.saveLayout({ base: 'USD', rows: ['USD', 'BTC', 'BYN', 'EUR'].map((currency) => ({ currency })) });
+    const first = createState();
+    first.initializeLayout();
+    first.rows.forEach((row, index) => { row.result = String(index + 1); });
+
+    first.activateRow(first.rows[3]);
+
+    assert.deepEqual(first.rows.map(({ currency }) => currency), ['USD', 'BTC', 'BYN', 'EUR']);
+    const returning = createState();
+    returning.initializeLayout();
+    assert.equal(returning.base, 'EUR');
+    assert.deepEqual(returning.rows.map(({ currency }) => currency), ['USD', 'BTC', 'BYN', 'EUR']);
+
+    returning.moveRow(0, 2, false);
+    assert.equal(returning.base, 'EUR');
+    assert.deepEqual(returning.rows.map(({ currency }) => currency), ['BTC', 'BYN', 'USD', 'EUR']);
+    const restarted = createState();
+    restarted.initializeLayout();
+    assert.equal(restarted.base, 'EUR');
+    assert.deepEqual(restarted.rows.map(({ currency }) => currency), ['BTC', 'BYN', 'USD', 'EUR']);
+
+    restarted.moveRow(3, 1, false);
+    const last = createState();
+    last.initializeLayout();
+    assert.equal(last.base, 'EUR');
+    assert.deepEqual(last.rows.map(({ currency }) => currency), ['BTC', 'EUR', 'BYN', 'USD']);
+}));
+
+for (const base of ['BTC', '../USD']) {
+    test(`damaged legacy layout with absent base ${base} preserves row order without duplicates`, () => layoutFixture((values, createState) => {
+        values.set('currency-converter-layout', JSON.stringify({
+            base, amount: '42',
+            rows: [null, { currency: 'EUR' }, { currency: 'USD' }, { currency: 'EUR' }, { currency: '<script>' }],
+        }));
+        const returning = createState();
+
+        returning.initializeLayout();
+        returning.save();
+        const restarted = createState();
+        restarted.initializeLayout();
+
+        assert.equal(restarted.base, 'EUR');
+        assert.deepEqual(restarted.rows.map(({ currency }) => currency), ['EUR', 'USD']);
+        assert.equal(restarted.amount, '42');
+    }));
+}
 
 test('catalog fallback preserves assets and exposes a separate warning without persisting it as fresh', async () => {
     const originalSettings = currencyApi.providerSettings;

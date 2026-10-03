@@ -105,8 +105,8 @@ export function createConverterState(catalog) {
             if (saved && Array.isArray(saved.rows)) {
                 const savedBase = saved.activeCurrency || saved.base || this.base;
                 const currencies = [...new Set([
-                    savedBase,
                     ...saved.rows.map(({ currency }) => currency),
+                    savedBase,
                 ].filter((currency) => typeof currency === 'string' && currency.length > 0))];
 
                 // A provider can temporarily omit a previously selected asset. Keep the
