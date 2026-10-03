@@ -10,6 +10,7 @@ use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -26,6 +27,26 @@ class ConversionEndpointTest extends TestCase
             ->assertJsonPath('code', 'provider_unavailable')
             ->assertJsonPath('provider', 'nbrb')
             ->assertJsonPath('message', 'НБРБ временно недоступен. Попробуйте позже.');
+    }
+
+    public function test_a_corrupted_saved_rate_date_returns_503_when_the_provider_is_offline(): void
+    {
+        $this->travelTo(new DateTimeImmutable('2026-10-01T12:00:00Z'));
+        Http::preventStrayRequests();
+        $this->primeCryptoCatalog();
+        $this->getJson('/currencies')->assertOk();
+        DB::table('exchange_rates')->insert([
+            'provider' => 'nbrb', 'from_currency' => 'USD', 'to_currency' => 'BYN',
+            'rate' => '3.12', 'fetched_at' => '2026-10-01 11:00:00', 'published_at' => 'not-a-date',
+        ]);
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::failedConnection('offline')]);
+
+        $this->postJson('/conversion', ['amount' => '1', 'from' => 'USD', 'to' => 'BYN'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'provider_unavailable')
+            ->assertJsonPath('provider', 'nbrb');
+
+        $this->assertDatabaseHas('exchange_rates', ['published_at' => 'not-a-date', 'rate' => '3.12']);
     }
 
     public function test_it_uses_a_saved_rate_when_offline(): void
@@ -170,6 +191,7 @@ class ConversionEndpointTest extends TestCase
 
     public function test_it_converts_usd_to_byn(): void
     {
+        $this->travelTo(new DateTimeImmutable('2026-09-24T12:00:00+03:00'));
         Http::fake([
             'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response(
                 file_get_contents(base_path('tests/Fixtures/nbrb/nbrb-usd.json')),
@@ -183,6 +205,30 @@ class ConversionEndpointTest extends TestCase
             ->assertJsonPath('factor', '3.120000000000000000')
             ->assertJsonPath('sources.0', 'nbrb')
             ->assertJsonPath('isStale', false);
+    }
+
+    public function test_a_successful_cross_rate_reports_the_oldest_official_day_and_staleness(): void
+    {
+        $this->travelTo(new DateTimeImmutable('2026-10-01T12:00:00+03:00'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([
+                ['Cur_ID' => 431, 'Cur_Abbreviation' => 'USD', 'Cur_Name' => 'Доллар США', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3, 'Date' => '2026-09-30T00:00:00'],
+                ['Cur_ID' => 451, 'Cur_Abbreviation' => 'EUR', 'Cur_Name' => 'Евро', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 4, 'Date' => '2026-10-01T00:00:00'],
+            ]),
+            'https://api.kraken.com/0/public/AssetPairs*' => Http::response(['error' => [], 'result' => []]),
+            'https://api.coingecko.com/api/v3/coins/markets*' => Http::response([]),
+        ]);
+
+        $this->postJson('/conversions', ['from' => 'EUR', 'targets' => ['USD'], 'refresh' => true])
+            ->assertOk()
+            ->assertJsonPath('conversions.USD.factor', '1.333333333333333333')
+            ->assertJsonPath('conversions.USD.isStale', true)
+            ->assertJsonPath('conversions.USD.isFallback', false)
+            ->assertJsonPath('conversions.USD.rateDate', '2026-09-30')
+            ->assertJsonPath('conversions.USD.rateDates', ['2026-09-30', '2026-10-01']);
+
+        $this->assertDatabaseCount('exchange_rates', 2);
     }
 
     public function test_it_rejects_invalid_amounts_and_currencies(): void

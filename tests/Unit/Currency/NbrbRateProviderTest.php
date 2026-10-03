@@ -12,6 +12,7 @@ use App\Currency\Providers\NbrbRateProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class NbrbRateProviderTest extends TestCase
@@ -75,6 +76,71 @@ class NbrbRateProviderTest extends TestCase
         $this->expectException(ProviderResponseException::class);
 
         $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+    }
+
+    #[TestWith([''])]
+    #[TestWith(['today'])]
+    #[TestWith(['2026-02-30T00:00:00'])]
+    #[TestWith(['2026-09-24T25:00:00'])]
+    #[TestWith(['2026-09-24T00:00:00+25:00'])]
+    #[TestWith(['2026-09-24T00:00:00+03:75'])]
+    #[TestWith(['2026-09-24 trailing text'])]
+    public function test_it_rejects_a_malformed_effective_date(string $date): void
+    {
+        $this->travelTo(new \DateTimeImmutable('2026-10-01T12:00:00+03:00'));
+        Http::preventStrayRequests();
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([[
+            'Cur_Abbreviation' => 'USD', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3.12, 'Date' => $date,
+        ]])]);
+
+        $this->expectException(ProviderResponseException::class);
+
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+    }
+
+    public function test_it_rejects_a_future_effective_day_in_minsk(): void
+    {
+        $this->travelTo(new \DateTimeImmutable('2026-10-01T23:30:00+03:00'));
+        Http::preventStrayRequests();
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([[
+            'Cur_Abbreviation' => 'USD', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3.12, 'Date' => '2026-10-01T21:00:00Z',
+        ]])]);
+
+        $this->expectException(ProviderResponseException::class);
+
+        $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+    }
+
+    public function test_it_marks_a_successful_previous_day_response_stale_without_fallback(): void
+    {
+        $this->travelTo(new \DateTimeImmutable('2026-10-01T00:01:00+03:00'));
+        Http::preventStrayRequests();
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([[
+            'Cur_Abbreviation' => 'USD', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3.12, 'Date' => '2026-09-30T00:00:00',
+        ]])]);
+
+        $rate = $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+
+        $this->assertTrue($rate->isStale);
+        $this->assertFalse($rate->isFallback);
+        $this->assertSame('2026-09-30', $rate->rateDate?->format('Y-m-d'));
+        $this->assertSame('2026-09-30T21:01:00+00:00', $rate->fetchedAt->format(DATE_ATOM));
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_normalizes_an_offset_date_to_the_minsk_effective_day(): void
+    {
+        $this->travelTo(new \DateTimeImmutable('2028-03-01T00:10:00+03:00'));
+        Http::preventStrayRequests();
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::response([[
+            'Cur_Abbreviation' => 'USD', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3.12, 'Date' => '2028-02-29T21:00:00.000Z',
+        ]])]);
+
+        $rate = $this->provider->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+
+        $this->assertSame('2028-03-01T00:00:00+03:00', $rate->rateDate?->format(DATE_ATOM));
+        $this->assertFalse($rate->isStale);
+        Http::assertSentCount(1);
     }
 
     public function test_it_maps_http_errors_to_a_provider_exception(): void

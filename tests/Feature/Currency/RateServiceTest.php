@@ -10,6 +10,7 @@ use App\Currency\Enums\ProviderCapability;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\RateUnavailableException;
+use App\Currency\Providers\NbrbRateProvider;
 use App\Currency\Repositories\ExchangeRateRepository;
 use App\Currency\Services\ProviderSelectionService;
 use App\Currency\Services\RateService;
@@ -54,6 +55,63 @@ class RateServiceTest extends TestCase
         $this->assertSame(1, $provider->calls);
         $this->assertTrue($rate->isStale);
         $this->assertSame('provider_unavailable', $rate->fallbackReason);
+    }
+
+    public function test_minsk_midnight_refreshes_the_official_rate_and_the_provider_catalog(): void
+    {
+        $this->travelTo(new DateTimeImmutable('2026-09-30T23:59:00+03:00'));
+        Http::preventStrayRequests();
+        Http::fake(['https://api.nbrb.by/exrates/rates?periodicity=0' => Http::sequence()
+            ->push([['Cur_Abbreviation' => 'USD', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3.12, 'Date' => '2026-09-30T00:00:00']])
+            ->push([['Cur_Abbreviation' => 'USD', 'Cur_Scale' => 1, 'Cur_OfficialRate' => 3.15, 'Date' => '2026-10-01T00:00:00']]),
+        ]);
+        $repository = new ExchangeRateRepository;
+        $provider = new NbrbRateProvider;
+        $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $this->travelTo(new DateTimeImmutable('2026-10-01T00:01:00+03:00'));
+
+        $rate = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+
+        $this->assertSame('3.150000000000000000', $rate->rate);
+        $this->assertSame('2026-10-01', $rate->rateDate?->format('Y-m-d'));
+        $this->assertFalse($rate->isStale);
+        $this->assertFalse($rate->isFallback);
+        Http::assertSentCount(2);
+    }
+
+    public function test_legacy_rate_without_an_effective_date_uses_ttl_and_remains_undated_on_fallback(): void
+    {
+        $this->travelTo(new DateTimeImmutable('2026-10-01T12:00:00Z'));
+        config(['currency.nbrb.rate_ttl_seconds' => 60]);
+        $repository = new ExchangeRateRepository;
+        $repository->save($this->rate('3.12', new DateTimeImmutable('2026-10-01T12:00:00Z')));
+        $provider = $this->provider(exception: new ProviderException('offline'));
+        $fresh = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+        $this->assertFalse($fresh->isStale);
+        $this->assertSame(0, $provider->calls);
+        $this->travel(61)->seconds();
+
+        $fallback = $this->service($repository, [$provider])->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
+
+        $this->assertSame('3.12', $fallback->rate);
+        $this->assertNull($fallback->rateDate);
+        $this->assertTrue($fallback->isStale);
+        $this->assertTrue($fallback->isFallback);
+        $this->assertSame('provider_unavailable', $fallback->fallbackReason);
+        $this->assertSame(1, $provider->calls);
+    }
+
+    public function test_provider_failure_rejects_cache_older_than_the_configured_fallback_limit(): void
+    {
+        $this->travelTo(new DateTimeImmutable('2026-10-10T12:00:00Z'));
+        config(['currency.nbrb.max_stale_age_seconds' => 604800]);
+        $repository = new ExchangeRateRepository;
+        $repository->save($this->rate('3.12', new DateTimeImmutable('2026-10-03T11:59:59Z')));
+
+        $this->expectException(RateUnavailableException::class);
+
+        $this->service($repository, [$this->provider(exception: new ProviderException('offline'))])
+            ->getRate(Currency::fiat('USD'), Currency::fiat('BYN'));
     }
 
     public function test_fresh_cache_does_not_call_provider(): void
