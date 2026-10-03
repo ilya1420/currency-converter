@@ -13,7 +13,7 @@ use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Exceptions\UnsupportedCurrencyPairException;
 use App\Currency\Services\DecimalCalculator;
 use App\Currency\Services\ExternalApiClientFactory;
-use Brick\Math\BigDecimal;
+use Brick\Math\Exception\MathException;
 use Brick\Math\RoundingMode;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -75,8 +75,9 @@ final class NbrbRateProvider implements RateProviderInterface
             Currency::fiat('BYN'),
             $rate,
             RateSource::NBRB,
-            new DateTimeImmutable,
+            DateTimeImmutable::createFromInterface(now()),
             $rateDate,
+            $rateDate->format('Y-m-d') !== now('Europe/Minsk')->format('Y-m-d'),
         );
     }
 
@@ -88,7 +89,8 @@ final class NbrbRateProvider implements RateProviderInterface
     /** @return array<mixed> */
     private function catalog(bool $forceRefresh = false): array
     {
-        if (! $forceRefresh && $this->catalog !== null && $this->catalogFetchedAt?->modify('+30 minutes') > new DateTimeImmutable) {
+        $now = DateTimeImmutable::createFromInterface(now());
+        if (! $forceRefresh && $this->catalog !== null && $this->catalogFetchedAt?->modify('+30 minutes') > $now) {
             return $this->catalog;
         }
 
@@ -101,7 +103,7 @@ final class NbrbRateProvider implements RateProviderInterface
         }
 
         $this->catalog = $response->json();
-        $this->catalogFetchedAt = new DateTimeImmutable;
+        $this->catalogFetchedAt = $now;
 
         return $this->catalog;
     }
@@ -124,20 +126,15 @@ final class NbrbRateProvider implements RateProviderInterface
         $officialRate = $record['Cur_OfficialRate'] ?? null;
         $scale = $record['Cur_Scale'] ?? null;
 
-        if (! is_int($scale) && ! is_float($scale) && ! is_string($scale)) {
-            throw new ProviderException('NBRB response has no currency scale.');
-        }
-
-        if (! is_int($officialRate) && ! is_float($officialRate) && ! is_string($officialRate)) {
-            throw new ProviderException('NBRB response has no official rate.');
-        }
+        $rate = ExchangeRate::positiveDecimal($officialRate);
+        $currencyScale = ExchangeRate::positiveDecimal($scale);
 
         try {
-            return BigDecimal::of((string) $officialRate)
-                ->dividedBy((string) $scale, DecimalCalculator::INTERNAL_SCALE, RoundingMode::HalfUp)
+            return $rate
+                ->dividedBy($currencyScale, DecimalCalculator::INTERNAL_SCALE, RoundingMode::HalfUp)
                 ->__toString();
-        } catch (Throwable $exception) {
-            throw new ProviderException('NBRB response has invalid rate data.', previous: $exception);
+        } catch (MathException $exception) {
+            throw new ProviderResponseException('NBRB response has invalid rate data.', previous: $exception);
         }
     }
 
@@ -146,12 +143,18 @@ final class NbrbRateProvider implements RateProviderInterface
     {
         $date = $record['Date'] ?? null;
 
-        if (! is_string($date)) {
+        if (! is_string($date) || ! preg_match('/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/D', $date)) {
             return null;
         }
 
         try {
-            return new DateTimeImmutable($date, new DateTimeZone('Europe/Minsk'));
+            $timezone = new DateTimeZone('Europe/Minsk');
+            $parsed = new DateTimeImmutable($date, $timezone);
+            if (DateTimeImmutable::getLastErrors() !== false) {
+                return null;
+            }
+
+            return $parsed->setTimezone($timezone)->setTime(0, 0);
         } catch (Throwable) {
             return null;
         }

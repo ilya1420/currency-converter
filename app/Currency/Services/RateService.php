@@ -73,7 +73,7 @@ final class RateService
 
             if (isset($this->providerFailures[$provider::class])) {
                 $cached = $this->rates->findLatest($source, $from, $to);
-                if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
+                if ($cached && $cached->fetchedAt >= DateTimeImmutable::createFromInterface(now())->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
                     return $this->resolvedRates[$key] = $this->fallback($cached, $this->providerFailures[$provider::class]);
                 }
 
@@ -94,7 +94,7 @@ final class RateService
             } catch (ProviderException $exception) {
                 $this->providerFailures[$provider::class] = $exception;
                 $cached = $this->rates->findLatest($source, $from, $to);
-                if ($cached && $cached->fetchedAt >= (new DateTimeImmutable)->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
+                if ($cached && $cached->fetchedAt >= DateTimeImmutable::createFromInterface(now())->sub(new DateInterval('PT'.$this->maxStaleAge($source).'S'))) {
                     return $this->resolvedRates[$key] = $this->fallback($cached, $exception);
                 }
 

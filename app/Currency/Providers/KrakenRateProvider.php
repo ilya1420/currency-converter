@@ -59,11 +59,14 @@ final class KrakenRateProvider implements RateProviderInterface
         }
 
         $result = $response->json('result');
-        if (! is_array($result) || count($result) !== 1 || ! is_array($ticker = reset($result)) || ! isset($ticker['c'][0])) {
+        if (! is_array($result) || count($result) !== 1 || ! is_array($ticker = reset($result))
+            || ! is_array($ticker['c'] ?? null) || ! array_key_exists(0, $ticker['c'])) {
             throw new ProviderResponseException('Kraken returned an invalid ticker.');
         }
 
-        return new ExchangeRate($from, $to, (string) $ticker['c'][0], RateSource::KRAKEN, new DateTimeImmutable);
+        $price = ExchangeRate::positiveDecimal($ticker['c'][0])->__toString();
+
+        return new ExchangeRate($from, $to, $price, RateSource::KRAKEN, new DateTimeImmutable);
     }
 
     private function retryAfter(?string $value): ?int

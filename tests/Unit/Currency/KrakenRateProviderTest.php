@@ -6,10 +6,12 @@ use App\Currency\Enums\Currency;
 use App\Currency\Enums\RateSource;
 use App\Currency\Exceptions\ProviderException;
 use App\Currency\Exceptions\ProviderRateLimitException;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Currency\Providers\KrakenAssetMapper;
 use App\Currency\Providers\KrakenMarketDataProvider;
 use App\Currency\Providers\KrakenRateProvider;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class KrakenRateProviderTest extends TestCase
@@ -89,5 +91,61 @@ class KrakenRateProviderTest extends TestCase
     private function fixture(string $name): string
     {
         return (string) file_get_contents(base_path("tests/Fixtures/kraken/{$name}"));
+    }
+
+    #[DataProvider('invalidClosingPrices')]
+    public function test_it_rejects_malformed_closing_prices(mixed $closingPrice): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.kraken.com/0/public/Ticker?pair=XBTUSD' => Http::response([
+            'error' => [], 'result' => ['XXBTZUSD' => ['c' => $closingPrice]],
+        ])]);
+
+        $this->expectException(ProviderResponseException::class);
+        try {
+            (new KrakenRateProvider(new KrakenAssetMapper))->getRate(Currency::crypto('BTC', 'XBTUSD'), Currency::fiat('USD'));
+        } finally {
+            Http::assertSentCount(1);
+        }
+    }
+
+    /** @return array<string, array{mixed}> */
+    public static function invalidClosingPrices(): array
+    {
+        return [
+            'array price' => [[[123]]], 'boolean price' => [[true]], 'null price' => [[null]],
+            'string closing field' => ['123'], 'empty closing field' => [[]],
+            'zero' => [['0']], 'negative' => [['-1']], 'garbage' => [['oops']],
+            'fraction' => [['1/2']], 'excessive exponent' => [['1e1024']],
+            'huge exponent' => [['1e1000000000']], 'exponent overflow' => [['1e99999999999999999999']],
+        ];
+    }
+
+    public function test_it_rejects_a_json_number_that_overflows_to_infinity(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.kraken.com/0/public/Ticker?pair=XBTUSD' => Http::response(
+            '{"error":[],"result":{"XXBTZUSD":{"c":[1e309]}}}',
+        )]);
+
+        $this->expectException(ProviderResponseException::class);
+        try {
+            (new KrakenRateProvider(new KrakenAssetMapper))->getRate(Currency::crypto('BTC', 'XBTUSD'), Currency::fiat('USD'));
+        } finally {
+            Http::assertSentCount(1);
+        }
+    }
+
+    public function test_it_preserves_small_scientific_prices_as_decimals(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.kraken.com/0/public/Ticker?pair=XBTUSD' => Http::response([
+            'error' => [], 'result' => ['XXBTZUSD' => ['c' => ['1.234567890123456789e-8']]],
+        ])]);
+
+        $rate = (new KrakenRateProvider(new KrakenAssetMapper))->getRate(Currency::crypto('BTC', 'XBTUSD'), Currency::fiat('USD'));
+
+        $this->assertSame('0.00000001234567890123456789', $rate->rate);
+        Http::assertSentCount(1);
     }
 }

@@ -5,10 +5,12 @@ namespace App\Currency\Repositories;
 use App\Currency\DTO\ExchangeRate;
 use App\Currency\Enums\Currency;
 use App\Currency\Enums\RateSource;
+use App\Currency\Exceptions\ProviderResponseException;
 use App\Models\StoredExchangeRate;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Support\Facades\DB;
+use ValueError;
 
 final class ExchangeRateRepository
 {
@@ -17,9 +19,11 @@ final class ExchangeRateRepository
         return DB::transaction(function () use ($rate): ExchangeRate {
             $identity = ['provider' => $rate->source->value, 'from_currency' => $rate->from->code, 'to_currency' => $rate->to->code];
             $stored = StoredExchangeRate::query()->where($identity)->lockForUpdate()->first();
+            $storedRateDate = $stored === null ? null : $this->storedDate($stored, 'published_at')?->setTimezone(new DateTimeZone('Europe/Minsk'));
 
-            if ($rate->source === RateSource::NBRB && $stored?->published_at !== null
-                && ($rate->rateDate === null || $this->isOlderRateDate($rate->rateDate, $stored->published_at))) {
+            if ($rate->source === RateSource::NBRB && $storedRateDate !== null
+                && $storedRateDate->format('Y-m-d') <= now('Europe/Minsk')->format('Y-m-d')
+                && ($rate->rateDate === null || $this->isOlderRateDate($rate->rateDate, $storedRateDate))) {
                 $cached = $this->map($stored);
                 if ($cached !== null) {
                     return new ExchangeRate(
@@ -36,9 +40,12 @@ final class ExchangeRateRepository
                 }
             }
 
-            StoredExchangeRate::query()->updateOrCreate($identity, [
-                'rate' => $rate->rate, 'fetched_at' => $rate->fetchedAt, 'published_at' => $rate->rateDate,
-            ]);
+            StoredExchangeRate::query()->upsert([[
+                ...$identity,
+                'rate' => $rate->rate,
+                'fetched_at' => $rate->fetchedAt->setTimezone(new DateTimeZone('UTC')),
+                'published_at' => $rate->rateDate?->setTimezone(new DateTimeZone('UTC')),
+            ]], array_keys($identity), ['rate', 'fetched_at', 'published_at']);
 
             return $rate;
         });
@@ -64,10 +71,51 @@ final class ExchangeRateRepository
 
     private function map(?StoredExchangeRate $stored): ?ExchangeRate
     {
-        return $stored === null ? null : new ExchangeRate(
-            $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
-            RateSource::from($stored->provider), $stored->fetched_at, $stored->published_at,
-        );
+        if ($stored === null) {
+            return null;
+        }
+
+        $fetchedAt = $this->storedDate($stored, 'fetched_at');
+        $rateDate = $this->storedDate($stored, 'published_at');
+        if ($fetchedAt === null || $fetchedAt > now() || ($stored->getRawOriginal('published_at') !== null && $rateDate === null)) {
+            return null;
+        }
+
+        $source = RateSource::from($stored->provider);
+        $isStale = false;
+        if ($source === RateSource::NBRB && $rateDate !== null) {
+            $rateDate = $rateDate->setTimezone(new DateTimeZone('Europe/Minsk'));
+            $today = now('Europe/Minsk')->format('Y-m-d');
+            if ($rateDate->format('Y-m-d') > $today) {
+                return null;
+            }
+            $isStale = $rateDate->format('Y-m-d') < $today;
+        }
+
+        try {
+            return new ExchangeRate(
+                $this->currency($stored->from_currency, RateSource::from($stored->provider), true), $this->currency($stored->to_currency, RateSource::from($stored->provider), false), $stored->rate,
+                $source, $fetchedAt, $rateDate, $isStale,
+            );
+        } catch (ProviderResponseException) {
+            return null;
+        }
+    }
+
+    private function storedDate(StoredExchangeRate $stored, string $attribute): ?DateTimeImmutable
+    {
+        $value = $stored->getRawOriginal($attribute);
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            $date = DateTimeImmutable::createFromFormat('!'.$stored->getDateFormat(), $value, new DateTimeZone('UTC'));
+        } catch (ValueError) {
+            return null;
+        }
+
+        return $date !== false && DateTimeImmutable::getLastErrors() === false ? $date : null;
     }
 
     private function currency(string $code, RateSource $source, bool $from): Currency

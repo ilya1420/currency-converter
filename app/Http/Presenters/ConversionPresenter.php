@@ -43,6 +43,7 @@ final readonly class ConversionPresenter
             static fn ($rate): ?string => $rate->rateDate?->format('Y-m-d'),
             $result->ratesUsed,
         ))));
+        sort($rateDates, SORT_STRING);
 
         return [
             'sources' => array_values(array_unique(array_map(static fn ($rate): string => $rate->source->value, $result->ratesUsed))),
